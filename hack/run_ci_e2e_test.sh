@@ -22,8 +22,10 @@ set -euo pipefail
 RUNNING_IN_CI=${JOB_NAME:-""}
 BUILD_ID=${BUILD_ID:-"${USER}-local"}
 PROVIDER=${PROVIDER:-"aws"}
+TERRAFORM_VERSION=${TERRAFORM_VERSION:-"0.12.2"}
 TEST_SET=${TEST_SET:-"conformance"}
-TEST_CLUSTER_TARGET_VERSION=${TEST_CLUSTER_VERSION:-"v1.14.1"}
+TEST_CLUSTER_TARGET_VERSION=${TEST_CLUSTER_TARGET_VERSION:-""}
+TEST_CLUSTER_INITIAL_VERSION=${TEST_CLUSTER_INITIAL_VERSION:-""}
 export TF_VAR_cluster_name=${BUILD_ID}
 
 # Install dependencies
@@ -34,7 +36,7 @@ if ! [ -x "$(command -v terraform)" ]; then
   fi
   echo "Installing terraform"
   cd /tmp
-  curl https://releases.hashicorp.com/terraform/0.11.10/terraform_0.11.10_linux_amd64.zip -Lo terraform.zip
+  curl https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip -Lo terraform.zip
   unzip -n terraform.zip terraform
   chmod +x terraform
   mv terraform /usr/local/bin
@@ -88,6 +90,12 @@ if [ -n "${RUNNING_IN_CI}" ]; then
     ;;
   "hetzner")
     export HCLOUD_TOKEN=${HZ_E2E_TOKEN}
+    ;;
+  "packet")
+    export PACKET_AUTH_TOKEN=${PACKET_API_KEY}
+    ;;
+  "gce")
+    export GOOGLE_CREDENTIALS=${serviceAccount}
     ;;
   *)
     echo "unknown provider ${PROVIDER}"
@@ -146,7 +154,8 @@ function runE2E() {
     ./test/e2e/... \
     -identifier=${BUILD_ID} \
     -provider=${PROVIDER} \
-    -cluster-version=${TEST_CLUSTER_TARGET_VERSION}
+    -target-version=${TEST_CLUSTER_TARGET_VERSION} \
+    -initial-version=${TEST_CLUSTER_INITIAL_VERSION}
 }
 
 # Start the tests

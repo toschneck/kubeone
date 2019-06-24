@@ -16,7 +16,7 @@ on-prem or bare-metal cluster.
 
 ## Project Status
 
-As of v0.6.0, KubeOne is in the beta phase. Check out the 
+As of v0.6.0, KubeOne is in the beta phase. Check out the
 [Backwards Compatibility Policy][6] for more details on
 backwards compatibility, KubeOne versioning, and maturity of each KubeOne
 component.
@@ -66,6 +66,16 @@ KubeOne.
 make install
 ```
 
+To install completions for bash (zsh also available), run or put this command into your .bashrc file:
+```bash
+. <(kubeone completion bash)
+```
+
+To generate documentation (man pages for example, more available), run:
+```bash
+kubeone document man -o /tmp/man
+```
+
 ## Kubernetes Versions Compatibility
 
 Each KubeOne version is supposed to support and work with a set of Kubernetes
@@ -77,16 +87,19 @@ New KubeOne release will be done for each minor Kubernetes version. Usually, a
 new release is targeted 2-3 weeks after Kubernetes release, depending on number
 of changes needed to support a new version.
 
-In the following table you can find what are supported Kubernetes versions for
-each KubeOne version. KubeOne versions that are crossed out are not supported.
-It's highly recommended to use the latest version whenever possible.
+Since some terraform releases introduces incompatibilities to previuos versions,
+only a specific version range is supported with each KubeOne release.
 
-| KubeOne version | 1.14 | 1.13 | Supported providers                                                |
-|-----------------|------|------|--------------------------------------------------------------------|
-| v0.9.0+         | +    | +    | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack, vSphere, Azure |
-| v0.8.0+         | +    | +    | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack, vSphere        |
-| v0.6.0+         | +    | +    | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack                 |
-| v0.5.0          | +    | +    | AWS, DigitalOcean, GCE, Hetzner, OpenStack                         |
+In the following table you can find what are supported Kubernetes and Terraform
+versions for each KubeOne version. KubeOne versions that are crossed out are not
+supported. It's highly recommended to use the latest version whenever possible.
+
+| KubeOne version | 1.14 | 1.13 | Terraform | Supported providers                                                |
+|-----------------|------|------|-----------|--------------------------------------------------------------------|
+| v0.9.0+         | +    | +    | v0.12+    | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack, vSphere, Azure |
+| v0.8.0+         | +    | +    | v0.11     | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack, vSphere        |
+| v0.6.0+         | +    | +    | v0.11     | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack                 |
+| v0.5.0          | +    | +    | v0.11     | AWS, DigitalOcean, GCE, Hetzner, OpenStack                         |
 
 ## Getting Started
 

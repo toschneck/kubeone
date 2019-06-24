@@ -26,13 +26,17 @@ import (
 )
 
 func generateKubeadmConfig(ctx *util.Context, node kubeoneapi.HostConfig) error {
-	kubeadmConf, err := kubeadm.Config(ctx, node)
+	kadm, err := kubeadm.New(ctx.Cluster.Versions.Kubernetes)
+	if err != nil {
+		return errors.Wrap(err, "failed to init kubeadm")
+	}
+
+	kubeadmConf, err := kadm.Config(ctx, node)
 	if err != nil {
 		return errors.Wrap(err, "failed to create kubeadm configuration")
 	}
 
 	ctx.Configuration.AddFile("cfg/master_0.yaml", kubeadmConf)
-
 	return nil
 }
 

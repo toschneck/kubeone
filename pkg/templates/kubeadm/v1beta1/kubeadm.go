@@ -20,9 +20,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Masterminds/semver"
+	"github.com/pkg/errors"
+
 	kubeadmv1beta1 "github.com/kubermatic/kubeone/pkg/apis/kubeadm/v1beta1"
 	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
 	"github.com/kubermatic/kubeone/pkg/features"
+	"github.com/kubermatic/kubeone/pkg/kubeflags"
+	"github.com/kubermatic/kubeone/pkg/templates/kubeadm/kubeadmargs"
 	"github.com/kubermatic/kubeone/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,6 +39,10 @@ import (
 // NewConfig returns all required configs to init a cluster via a set of v1beta1 configs
 func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object, error) {
 	cluster := ctx.Cluster
+	kubeSemVer, err := semver.NewVersion(cluster.Versions.Kubernetes)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to parse generate config, wrong kubernetes version %s", cluster.Versions.Kubernetes)
+	}
 
 	nodeIP := host.PrivateAddress
 	if nodeIP == "" {
@@ -51,9 +60,9 @@ func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object,
 	}
 
 	if ctx.JoinToken == "" {
-		tokenStr, err := bootstraputil.GenerateBootstrapToken()
-		if err != nil {
-			return nil, err
+		tokenStr, errBootstrap := bootstraputil.GenerateBootstrapToken()
+		if errBootstrap != nil {
+			return nil, errBootstrap
 		}
 		ctx.JoinToken = tokenStr
 	}
@@ -112,6 +121,7 @@ func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object,
 				ExtraArgs: map[string]string{
 					"endpoint-reconciler-type": "lease",
 					"service-node-port-range":  cluster.ClusterNetwork.NodePortRange,
+					"enable-admission-plugins": kubeflags.DefaultAdmissionControllers(kubeSemVer),
 				},
 				ExtraVolumes: []kubeadmv1beta1.HostPathMount{},
 			},
@@ -123,12 +133,6 @@ func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object,
 		},
 		ClusterName: cluster.Name,
 	}
-
-	// TODO(kron4eg): figure out working way to provide `bind-address` to
-	// apiservers as currently following line always renders only first node IP
-	// which is incorrent and leads to broken apiservers on non-1st CP nodes
-	//
-	// clusterConfig.APIServer.ExtraArgs["bind-address"] = hostAdvertiseAddress
 
 	if cluster.CloudProvider.CloudProviderInTree() {
 		renderedCloudConfig := "/etc/kubernetes/cloud-config"
@@ -163,7 +167,11 @@ func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object,
 		nodeRegistration.KubeletExtraArgs["cloud-provider"] = "external"
 	}
 
-	features.UpdateKubeadmClusterConfiguration(cluster.Features, clusterConfig)
+	args := kubeadmargs.NewFrom(clusterConfig.APIServer.ExtraArgs)
+	features.UpdateKubeadmClusterConfiguration(cluster.Features, args)
+
+	clusterConfig.APIServer.ExtraArgs = args.APIServer.ExtraArgs
+	clusterConfig.FeatureGates = args.FeatureGates
 
 	initConfig.NodeRegistration = nodeRegistration
 	joinConfig.NodeRegistration = nodeRegistration
