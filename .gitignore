@@ -9,4 +9,5 @@ tf.json
 .terraform
 terraform.tfvars
 *kubeconfig
-.aws-key
+!*kubeconfig/
+/vendor

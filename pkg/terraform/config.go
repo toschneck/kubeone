@@ -30,10 +30,13 @@ type controlPlane struct {
 	CloudProvider     *string  `json:"cloud_provider"`
 	PublicAddress     []string `json:"public_address"`
 	PrivateAddress    []string `json:"private_address"`
+	Hostnames         []string `json:"hostnames"`
 	SSHUser           string   `json:"ssh_user"`
 	SSHPort           int      `json:"ssh_port"`
 	SSHPrivateKeyFile string   `json:"ssh_private_key_file"`
 	SSHAgentSocket    string   `json:"ssh_agent_socket"`
+	Bastion           string   `json:"bastion"`
+	BastionPort       int      `json:"bastion_port"`
 }
 
 // Config represents configuration in the terraform output format
@@ -93,15 +96,24 @@ func (c *Config) Apply(cluster *kubeonev1alpha1.KubeOneCluster) error {
 			privateIP = cp.PrivateAddress[i]
 		}
 
-		hosts = append(hosts, kubeonev1alpha1.HostConfig{
-			ID:                i,
-			PublicAddress:     publicIP,
-			PrivateAddress:    privateIP,
-			SSHUsername:       cp.SSHUser,
-			SSHPort:           cp.SSHPort,
-			SSHPrivateKeyFile: cp.SSHPrivateKeyFile,
-			SSHAgentSocket:    cp.SSHAgentSocket,
-		})
+		hostname := ""
+		if i < len(cp.Hostnames) {
+			hostname = cp.Hostnames[i]
+		}
+
+		hosts = append(hosts, newHostConfig(i, publicIP, privateIP, hostname, cp))
+	}
+
+	if len(hosts) == 0 {
+		// there was no public IPs available
+		for i, privateIP := range cp.PrivateAddress {
+			hostname := ""
+			if i < len(cp.Hostnames) {
+				hostname = cp.Hostnames[i]
+			}
+
+			hosts = append(hosts, newHostConfig(i, "", privateIP, hostname, cp))
+		}
 	}
 
 	if len(hosts) > 0 {
@@ -110,10 +122,11 @@ func (c *Config) Apply(cluster *kubeonev1alpha1.KubeOneCluster) error {
 
 	// Walk through all configued workersets from terraform and apply their config
 	// by either merging it into an existing workerSet or creating a new one
-Out:
 	for workersetName, workersetValue := range c.KubeOneWorkers.Value {
 		var existingWorkerSet *kubeonev1alpha1.WorkerConfig
 
+		// Check do we have a workerset with the same name defined
+		// in the KubeOneCluster object
 		for idx, workerset := range cluster.Workers {
 			if workerset.Name == workersetName {
 				existingWorkerSet = &cluster.Workers[idx]
@@ -121,13 +134,17 @@ Out:
 			}
 		}
 
+		// If we didn't found a workerset defined in the cluster object,
+		// append a workerset from the terraform output to the cluster object
 		if existingWorkerSet == nil {
 			// no existing workerset found, use what we have from terraform
 			workersetValue.Name = workersetName
 			cluster.Workers = append(cluster.Workers, workersetValue)
-			break Out
+			continue
 		}
 
+		// If we found a workerset defined in the cluster object,
+		// merge values from the object and the terraform output
 		switch cluster.CloudProvider.Name {
 		case kubeonev1alpha1.CloudProviderNameAWS:
 			err = c.updateAWSWorkerset(existingWorkerSet, workersetValue.Config.CloudProviderSpec)
@@ -155,6 +172,21 @@ Out:
 	}
 
 	return nil
+}
+
+func newHostConfig(id int, publicIP, privateIP, hostname string, cp controlPlane) kubeonev1alpha1.HostConfig {
+	return kubeonev1alpha1.HostConfig{
+		ID:                id,
+		PublicAddress:     publicIP,
+		PrivateAddress:    privateIP,
+		Hostname:          hostname,
+		SSHUsername:       cp.SSHUser,
+		SSHPort:           cp.SSHPort,
+		SSHPrivateKeyFile: cp.SSHPrivateKeyFile,
+		SSHAgentSocket:    cp.SSHAgentSocket,
+		Bastion:           cp.Bastion,
+		BastionPort:       cp.BastionPort,
+	}
 }
 
 func (c *Config) updateAWSWorkerset(existingWorkerSet *kubeonev1alpha1.WorkerConfig, cfg json.RawMessage) error {
@@ -312,6 +344,8 @@ func (c *Config) updateOpenStackWorkerset(existingWorkerSet *kubeonev1alpha1.Wor
 		{key: "availabilityZone", value: openstackConfig.AvailabilityZone},
 		{key: "network", value: openstackConfig.Network},
 		{key: "subnet", value: openstackConfig.Subnet},
+		{key: "rootDiskSizeGB", value: openstackConfig.RootDiskSizeGB},
+		{key: "nodeVolumeAttachLimit", value: openstackConfig.NodeVolumeAttachLimit},
 		{key: "tags", value: openstackConfig.Tags},
 	}
 
@@ -384,6 +418,10 @@ func setWorkersetFlag(w *kubeonev1alpha1.WorkerConfig, name string, value interf
 			return nil
 		}
 	case *int:
+		if s == nil {
+			return nil
+		}
+	case *uint:
 		if s == nil {
 			return nil
 		}

@@ -19,6 +19,7 @@ package v1beta2
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
@@ -27,8 +28,8 @@ import (
 	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
 	"github.com/kubermatic/kubeone/pkg/features"
 	"github.com/kubermatic/kubeone/pkg/kubeflags"
+	"github.com/kubermatic/kubeone/pkg/state"
 	"github.com/kubermatic/kubeone/pkg/templates/kubeadm/kubeadmargs"
-	"github.com/kubermatic/kubeone/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,9 +37,13 @@ import (
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
 )
 
+const (
+	bootstrapTokenTTL = 60 * time.Minute
+)
+
 // NewConfig returns all required configs to init a cluster via a set of v1beta2 configs
-func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object, error) {
-	cluster := ctx.Cluster
+func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, error) {
+	cluster := s.Cluster
 	kubeSemVer, err := semver.NewVersion(cluster.Versions.Kubernetes)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse generate config, wrong kubernetes version %s", cluster.Versions.Kubernetes)
@@ -51,6 +56,12 @@ func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object,
 
 	nodeRegistration := kubeadmv1beta2.NodeRegistrationOptions{
 		Name: host.Hostname,
+		Taints: []corev1.Taint{
+			{
+				Effect: corev1.TaintEffectNoSchedule,
+				Key:    "node-role.kubernetes.io/master",
+			},
+		},
 		KubeletExtraArgs: map[string]string{
 			"anonymous-auth":      "false",
 			"node-ip":             nodeIP,
@@ -59,15 +70,15 @@ func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object,
 		},
 	}
 
-	if ctx.JoinToken == "" {
+	if s.JoinToken == "" {
 		tokenStr, errBootstrap := bootstraputil.GenerateBootstrapToken()
 		if errBootstrap != nil {
 			return nil, errBootstrap
 		}
-		ctx.JoinToken = tokenStr
+		s.JoinToken = tokenStr
 	}
 
-	bootstrapToken, err := kubeadmv1beta2.NewBootstrapTokenString(ctx.JoinToken)
+	bootstrapToken, err := kubeadmv1beta2.NewBootstrapTokenString(s.JoinToken)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +90,21 @@ func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object,
 			APIVersion: "kubeadm.k8s.io/v1beta1",
 			Kind:       "InitConfiguration",
 		},
-		BootstrapTokens: []kubeadmv1beta2.BootstrapToken{{Token: bootstrapToken}},
+		BootstrapTokens: []kubeadmv1beta2.BootstrapToken{
+			{
+				Token: bootstrapToken,
+				Groups: []string{
+					"system:bootstrappers:kubeadm:default-node-token",
+				},
+				TTL: &metav1.Duration{
+					Duration: bootstrapTokenTTL,
+				},
+				Usages: []string{
+					"signing",
+					"authentication",
+				},
+			},
+		},
 		LocalAPIEndpoint: kubeadmv1beta2.APIEndpoint{
 			AdvertiseAddress: nodeIP,
 		},
@@ -97,7 +122,7 @@ func NewConfig(ctx *util.Context, host kubeoneapi.HostConfig) ([]runtime.Object,
 		},
 		Discovery: kubeadmv1beta2.Discovery{
 			BootstrapToken: &kubeadmv1beta2.BootstrapTokenDiscovery{
-				Token:                    ctx.JoinToken,
+				Token:                    s.JoinToken,
 				APIServerEndpoint:        controlPlaneEndpoint,
 				UnsafeSkipCAVerification: true,
 			},

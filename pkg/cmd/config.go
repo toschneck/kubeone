@@ -32,7 +32,7 @@ import (
 	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
 	kubeonevalidation "github.com/kubermatic/kubeone/pkg/apis/kubeone/validation"
 	"github.com/kubermatic/kubeone/pkg/config"
-	"github.com/kubermatic/kubeone/pkg/util/yamled"
+	"github.com/kubermatic/kubeone/pkg/yamled"
 
 	kyaml "sigs.k8s.io/yaml"
 )
@@ -117,7 +117,7 @@ For the full reference of the configuration manifest, run the print command with
 
 	cmd.Flags().StringVarP(&pOpts.ClusterName, "cluster-name", "n", "demo-cluster", "cluster name")
 	cmd.Flags().StringVarP(&pOpts.KubernetesVersion, "kubernetes-version", "k", defaultKubernetesVersion, "Kubernetes version")
-	cmd.Flags().StringVarP(&pOpts.CloudProviderName, "provider", "p", defaultCloudProviderName, "cloud provider name (aws, digitalocean, gce, hetzner, packet, openstack, none)")
+	cmd.Flags().StringVarP(&pOpts.CloudProviderName, "provider", "p", defaultCloudProviderName, "cloud provider name (aws, digitalocean, gce, hetzner, packet, openstack, vsphere, none)")
 
 	// Hosts
 	cmd.Flags().StringVarP(&pOpts.Hosts, "hosts", "", "", "hosts in format of comma-separated key:value list, example: publicAddress:192.168.0.100,privateAddress:192.168.1.100,sshUsername:ubuntu,sshPort:22. Use quoted string of space separated values for multiple hosts")
@@ -506,6 +506,8 @@ features:
 # hosts:
 # - publicAddress: '1.2.3.4'
 #   privateAddress: '172.18.0.1'
+#   bastion: '4.3.2.1'
+#   bastionPort: 22  # can be left out if using the default (22)
 #   sshPort: 22 # can be left out if using the default (22)
 #   sshUsername: ubuntu
 #   # You usually want to configure either a private key OR an

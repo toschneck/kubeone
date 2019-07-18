@@ -1,5 +1,81 @@
 # Changelog
 
+# [v0.10.0-alpha.0](https://github.com/kubermatic/kubeone/releases/tag/v0.10.0-alpha.0) - 2019-07-17
+
+## Attention Needed
+
+* KubeOne now uses Go modules! :tada: ([#550](https://github.com/kubermatic/kubeone/pull/550))
+  * This should not introduce any breaking change
+  * If you're using `go get` to obtain KubeOne, you may have to enable support for Go modules by setting the `GO111MODULE` environment variable to `on`
+
+## Added
+
+* Add support for SSH over a bastion host ([#567](https://github.com/kubermatic/kubeone/pull/567))
+* Add an optional `rootDiskSizeGB` field to the worker spec for OpenStack ([#549](https://github.com/kubermatic/kubeone/pull/549))
+* Add an optional `nodeVolumeAttachLimit` field to the worker spec for OpenStack ([#572](https://github.com/kubermatic/kubeone/pull/572))
+* Add support for specifying OpenStack Tenant ID using the `OS_TENANT_ID` environment variable ([#551](https://github.com/kubermatic/kubeone/pull/551))
+* Add an example KubeOne Ansible playbook ([#576](https://github.com/kubermatic/kubeone/pull/576))
+
+## Changed
+
+* Fix Terraform integration not respecting multiple workerset definitions from `output.tf` ([#568](https://github.com/kubermatic/kubeone/pull/568))
+* Fix `install` failing if Terraform output is not provided ([#574](https://github.com/kubermatic/kubeone/pull/574))
+* Update `machine-controller` to v1.4.2 ([#572](https://github.com/kubermatic/kubeone/pull/572))
+* Control plane nodes are now tainted by default ([#564](https://github.com/kubermatic/kubeone/pull/564))
+
+# [v0.9.2](https://github.com/kubermatic/kubeone/releases/tag/v0.9.2) - 2019-07-04
+
+## Changed
+
+* Fix the CNI plugin URL for cluster upgrades on CoreOS ([#554](https://github.com/kubermatic/kubeone/pull/554))
+* Fix `kubelet` binary upgrade failure on CoreOS because of binary lock ([#556](https://github.com/kubermatic/kubeone/pull/556))
+
+# [v0.9.1](https://github.com/kubermatic/kubeone/releases/tag/v0.9.1) - 2019-07-03
+
+## Changed
+
+* Fix `.ClusterNetwork.PodSubnet` not being respected when using the Weave-Net CNI plugin ([#540](https://github.com/kubermatic/kubeone/pull/540))
+* Fix `kubeadm` preflight check failure (`IsDockerSystemdCheck`) on Ubuntu and CoreOS by making Docker use `systemd` cgroups driver ([#536](https://github.com/kubermatic/kubeone/pull/536), [#541](https://github.com/kubermatic/kubeone/pull/541))
+* Fix `kubeadm` preflight check failure on CentOS due to `kubelet` service not being enabled ([#541](https://github.com/kubermatic/kubeone/pull/541))
+
+# [v0.9.0](https://github.com/kubermatic/kubeone/releases/tag/v0.9.0) - 2019-07-02
+
+## Action Required
+
+* The Terraform integration now requires Terraform v0.12+
+  * Please see the official [Upgrading to Terraform v0.12](https://www.terraform.io/upgrade-guides/0-12.html)
+  document to find out how to update your Terraform scripts for v0.12
+  * The example Terraform scripts coming with KubeOne are already updated for v0.12
+  * KubeOne is not able to parse output of `terraform output` generated with Terraform
+  v0.11 or older anymore
+  * The Terraform output template (`output.tf`) has been changed and KubeOne is not able
+  to parse the old template anymore. You can check the output template
+  used by [example Terraform scripts](https://github.com/kubermatic/kubeone/blob/986b4bc361c6a0ae5d5319990c54e82c15a66cb3/examples/terraform/aws/output.tf) as a
+  reference
+
+## Added
+
+* Add support for Kubernetes 1.15 ([#486](https://github.com/kubermatic/kubeone/pull/486))
+* Add support for Microsoft Azure ([#469](https://github.com/kubermatic/kubeone/pull/469))
+* Add `kubeone completion` command for generating the shell completion scripts for `bash` and `zsh` ([#484](https://github.com/kubermatic/kubeone/pull/484))
+* Add `kubeone document` command for generating man pages and KubeOne documentation ([#484](https://github.com/kubermatic/kubeone/pull/484))
+* Add support for reading Terraform output directly from the directory ([#495](https://github.com/kubermatic/kubeone/pull/495))
+* Add missing fields to the workers specification API ([#499](https://github.com/kubermatic/kubeone/pull/499))
+
+## Changed
+
+* [BREAKING] KubeOne Terraform integration now uses Terraform v0.12+ ([#466](https://github.com/kubermatic/kubeone/pull/466))
+* [BREAKING] Change Terraform output template to conform with the KubeOneCluster API ([#503](https://github.com/kubermatic/kubeone/pull/503))
+* Fix Docker not starting properly for some providers on Ubuntu ([#512](https://github.com/kubermatic/kubeone/pull/512))
+* Fix `kubeone reset` failing if a MachineSet or Machine object has been already deleted and include more details in the error messages ([#508](https://github.com/kubermatic/kubeone/pull/508))
+* Fix ability to read Terraform output from the standard input (`stdin`) ([#479](https://github.com/kubermatic/kubeone/pull/479))
+* Update `machine-controller` to v1.3.0 ([#499](https://github.com/kubermatic/kubeone/pull/499))
+* Update DigitalOcean Cloud Controller Manager to v0.1.15 ([#516](https://github.com/kubermatic/kubeone/pull/516))
+* Use Docker 18.09.7 when provisioning new clusters ([#517](https://github.com/kubermatic/kubeone/pull/517))
+* Configure proxy for `kubelet` on control plane nodes if proxy settings are provided ([#496](https://github.com/kubermatic/kubeone/pull/496))
+* Configure proxy on worker nodes if proxy settings are provided ([#490](https://github.com/kubermatic/kubeone/pull/490))
+* Make GoBetween Load balancer configuration script work on all operating systems and fix minor bugs ([#494](https://github.com/kubermatic/kubeone/pull/494))
+
 # [v0.8.0](https://github.com/kubermatic/kubeone/releases/tag/v0.8.0) - 2019-05-30
 
 ## Added
