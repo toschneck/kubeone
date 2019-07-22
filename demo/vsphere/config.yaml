@@ -3,6 +3,7 @@ kind: KubeOneCluster
 name: demo
 versions:
   kubernetes: '1.14.2'
+# external CCM for supported providers
 cloudProvider:
   name: 'vsphere'
   cloudConfig: |
@@ -26,3 +27,9 @@ cloudProvider:
 
     [Network]
     public-network = "NAT Network"
+# features:
+  # Enables PodSecurityPolicy admission plugin in API server, as well as creates
+  # default 'privileged' PodSecurityPolicy, plus RBAC rules to authorize
+  # 'kube-system' namespace pods to 'use' it.
+#  podSecurityPolicy:
+#    enable: true
