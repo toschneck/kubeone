@@ -18,15 +18,20 @@
 # It installs dependencies and starts the tests
 
 set -euo pipefail
+# Required for signal propagation to work so the cleanup trap
+# gets executed when the script receives a SIGINT
+set -o monitor
 
 RUNNING_IN_CI=${JOB_NAME:-""}
 BUILD_ID=${BUILD_ID:-"${USER}-local"}
 PROVIDER=${PROVIDER:-"aws"}
-TERRAFORM_VERSION=${TERRAFORM_VERSION:-"0.12.2"}
+TERRAFORM_VERSION=${TERRAFORM_VERSION:-"0.12.5"}
 TEST_SET=${TEST_SET:-"conformance"}
 TEST_CLUSTER_TARGET_VERSION=${TEST_CLUSTER_TARGET_VERSION:-""}
 TEST_CLUSTER_INITIAL_VERSION=${TEST_CLUSTER_INITIAL_VERSION:-""}
 export TF_VAR_cluster_name=${BUILD_ID}
+
+PATH=$PATH:$(go env GOPATH)/bin
 
 # Install dependencies
 if ! [ -x "$(command -v terraform)" ]; then
@@ -46,8 +51,10 @@ fi
 
 if ! [ -x "$(command -v kubetest)" ]; then
   echo "Installing kubetest"
+  pushd .
+  cd /tmp
   go get k8s.io/test-infra/kubetest
-  PATH=$PATH:$(go env GOPATH)/bin
+  popd
 fi
 
 TERRAFORM_DIR=$PWD/examples/terraform
@@ -137,17 +144,12 @@ if [ ! -f "${SSH_PRIVATE_KEY_FILE}" ]; then
   ssh-add ${SSH_PRIVATE_KEY_FILE}
 fi
 
-# Build binaries
-echo "Building kubeone ..."
-make install
-
 function runE2E() {
   local test_set=$1
   local timeout=$2
   set -x
 
-  CGO_ENABLED=1 go test \
-    -race \
+  go test \
     -tags=e2e \
     -v \
     -timeout=${timeout} \
