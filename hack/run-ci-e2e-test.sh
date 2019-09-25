@@ -29,7 +29,9 @@ TERRAFORM_VERSION=${TERRAFORM_VERSION:-"0.12.5"}
 TEST_SET=${TEST_SET:-"conformance"}
 TEST_CLUSTER_TARGET_VERSION=${TEST_CLUSTER_TARGET_VERSION:-""}
 TEST_CLUSTER_INITIAL_VERSION=${TEST_CLUSTER_INITIAL_VERSION:-""}
-export TF_VAR_cluster_name=${BUILD_ID}
+TEST_OS_CONTROL_PLANE=${TEST_OS_CONTROL_PLANE:-""}
+TEST_OS_WORKERS=${TEST_OS_WORKERS:-""}
+export TF_VAR_cluster_name=k1-${BUILD_ID}
 
 PATH=$PATH:$(go env GOPATH)/bin
 
@@ -103,7 +105,16 @@ if [ -n "${RUNNING_IN_CI}" ]; then
     export TF_VAR_project_id=${PACKET_PROJECT_ID}
     ;;
   "gce")
-    export GOOGLE_CREDENTIALS=${serviceAccount}
+    export GOOGLE_CREDENTIALS=$(echo ${GOOGLE_SERVICE_ACCOUNT} | base64 -d)
+    ;;
+  "openstack")
+    export OS_AUTH_URL=${OS_AUTH_URL}
+    export OS_DOMAIN_NAME=${OS_DOMAIN_NAME}
+    export OS_REGION_NAME=${OS_REGION_NAME}
+    export OS_TENANT_NAME=${OS_TENANT_NAME}
+    export OS_USERNAME=${OS_USERNAME}
+    export OS_PASSWORD=${OS_PASSWORD}
+    echo ${k1_credentials} > /tmp/credentials.yaml
     ;;
   *)
     echo "unknown provider ${PROVIDER}"
@@ -157,6 +168,8 @@ function runE2E() {
     ./test/e2e/... \
     -identifier=${BUILD_ID} \
     -provider=${PROVIDER} \
+    -os-control-plane=${TEST_OS_CONTROL_PLANE} \
+    -os-workers=${TEST_OS_WORKERS} \
     -target-version=${TEST_CLUSTER_TARGET_VERSION} \
     -initial-version=${TEST_CLUSTER_INITIAL_VERSION}
 }

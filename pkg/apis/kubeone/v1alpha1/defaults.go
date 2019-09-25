@@ -40,6 +40,7 @@ func SetDefaults_KubeOneCluster(obj *KubeOneCluster) {
 	SetDefaults_APIEndpoints(obj)
 	SetDefaults_ClusterNetwork(obj)
 	SetDefaults_MachineController(obj)
+	SetDefaults_SystemPackages(obj)
 	SetDefaults_Features(obj)
 }
 
@@ -105,6 +106,14 @@ func SetDefaults_MachineController(obj *KubeOneCluster) {
 	}
 }
 
+func SetDefaults_SystemPackages(obj *KubeOneCluster) {
+	if obj.SystemPackages == nil {
+		obj.SystemPackages = &SystemPackages{
+			ConfigureRepositories: true,
+		}
+	}
+}
+
 func SetDefaults_Features(obj *KubeOneCluster) {
 	if obj.Features.MetricsServer == nil {
 		obj.Features.MetricsServer = &MetricsServer{
@@ -149,5 +158,8 @@ func defaultHostConfig(obj *HostConfig) {
 	}
 	if obj.BastionPort == 0 {
 		obj.BastionPort = 22
+	}
+	if obj.BastionUser == "" {
+		obj.BastionUser = obj.SSHUsername
 	}
 }

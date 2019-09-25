@@ -19,6 +19,7 @@ package kubeone
 import (
 	"encoding/json"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -48,6 +49,8 @@ type KubeOneCluster struct {
 	MachineController *MachineControllerConfig `json:"machineController,omitempty"`
 	// Features enables and configures additional cluster features
 	Features Features `json:"features,omitempty"`
+	// SystemPackages configure kubeone behaviour regarding OS packages
+	SystemPackages *SystemPackages `json:"systemPackages,omitempty"`
 	// Credentials used for machine-controller and external CCM
 	Credentials map[string]string `json:"credentials,omitempty"`
 }
@@ -63,6 +66,7 @@ type HostConfig struct {
 	SSHAgentSocket    string `json:"sshAgentSocket"`
 	Bastion           string `json:"bastion"`
 	BastionPort       int    `json:"bastionPort"`
+	BastionUser       string `json:"bastionUser"`
 	Hostname          string `json:"hostname"`
 
 	// Information populated at the runtime
@@ -164,6 +168,7 @@ type WorkerConfig struct {
 type ProviderSpec struct {
 	CloudProviderSpec   json.RawMessage   `json:"cloudProviderSpec"`
 	Labels              map[string]string `json:"labels"`
+	Taints              []corev1.Taint    `json:"taints,omitempty"`
 	SSHPublicKeys       []string          `json:"sshPublicKeys"`
 	OperatingSystem     string            `json:"operatingSystem"`
 	OperatingSystemSpec json.RawMessage   `json:"operatingSystemSpec"`
@@ -202,6 +207,13 @@ type Features struct {
 	DynamicAuditLog   *DynamicAuditLog   `json:"dynamicAuditLog"`
 	MetricsServer     *MetricsServer     `json:"metricsServer"`
 	OpenIDConnect     *OpenIDConnect     `json:"openidConnect"`
+}
+
+// SystemPackages controls configurations of APT/YUM
+type SystemPackages struct {
+	// ConfigureRepositories (true by default) is a flag to control automatic
+	// configuration of kubeadm / docker repositories.
+	ConfigureRepositories bool `json:"configureRepositories"`
 }
 
 // PodSecurityPolicy feature flag

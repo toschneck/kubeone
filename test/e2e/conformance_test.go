@@ -81,6 +81,14 @@ func TestClusterConformance(t *testing.T) {
 			configFilePath:        "../../test/e2e/testdata/config_packet.yaml",
 			expectedNumberOfNodes: 4, // 3 control planes + 1 worker
 		},
+		{
+			name:                  "verify k8s cluster deployment on OpenStack",
+			provider:              provisioner.OpenStack,
+			providerExternal:      false,
+			scenario:              NodeConformance,
+			configFilePath:        "../../test/e2e/testdata/config_os.yaml",
+			expectedNumberOfNodes: 4, // 3 control planes + 1 worker
+		},
 	}
 
 	for _, tc := range testcases {
@@ -98,6 +106,14 @@ func TestClusterConformance(t *testing.T) {
 			if testProvider != tc.provider {
 				t.SkipNow()
 			}
+			if err := ValidateOperatingSystem(testOSControlPlane); err != nil {
+				t.Fatal(err)
+			}
+			if err := ValidateOperatingSystem(testOSWorkers); err != nil {
+				t.Fatal(err)
+			}
+			osControlPlane := OperatingSystem(testOSControlPlane)
+			osWorkers := OperatingSystem(testOSWorkers)
 			t.Logf("Running conformance tests for Kubernetes v%s…", testTargetVersion)
 
 			// Create provisioner
@@ -122,7 +138,14 @@ func TestClusterConformance(t *testing.T) {
 
 			// Create configuration manifest
 			t.Log("Creating KubeOneCluster manifest…")
-			err = target.CreateConfig(testTargetVersion, tc.provider, tc.providerExternal)
+			var clusterNetworkPod string
+			var clusterNetworkService string
+			if tc.provider == provisioner.OpenStack {
+				clusterNetworkPod = "192.168.0.0/16"
+				clusterNetworkService = "172.16.0.0/12"
+			}
+			err = target.CreateConfig(testTargetVersion, tc.provider,
+				tc.providerExternal, clusterNetworkPod, clusterNetworkService)
 			if err != nil {
 				t.Fatalf("failed to create KubeOneCluster manifest: %v", err)
 			}
@@ -134,8 +157,23 @@ func TestClusterConformance(t *testing.T) {
 			// Create infrastructure
 			t.Log("Provisioning infrastructure using Terraform…")
 			args := []string{}
-			if tc.provider == provisioner.GCE {
-				args = []string{"-var", "control_plane_target_pool_members_count=1"}
+			if osControlPlane != OperatingSystemDefault {
+				tfFlags, err := ControlPlaneImageFlags(tc.provider, osControlPlane)
+				if err != nil {
+					t.Fatalf("failed to discover control plane os image: %v", err)
+				}
+				args = append(args, tfFlags...)
+			}
+			if osWorkers != OperatingSystemDefault {
+				args = append(args, "-var", fmt.Sprintf("worker_os=%s", osWorkers))
+			}
+			switch tc.provider {
+			case provisioner.GCE:
+				args = append(args, "-var", "control_plane_target_pool_members_count=1")
+			case provisioner.OpenStack:
+				args = append(args, "-var", "external_network_name=ext-net")
+				args = append(args, "-var", "subnet_cidr='10.0.42.0/24'")
+				args = append(args, "-var", "image='Ubuntu Bionic 18.04 (2019-05-02)'")
 			}
 			tf, err := pr.Provision(args...)
 			if err != nil {
@@ -144,7 +182,11 @@ func TestClusterConformance(t *testing.T) {
 
 			// Run 'kubeone install'
 			t.Log("Running 'kubeone install'…")
-			err = target.Install(tf)
+			var installFlags []string
+			if tc.provider == provisioner.OpenStack {
+				installFlags = append(installFlags, "-c", "/tmp/credentials.yaml")
+			}
+			err = target.Install(tf, installFlags)
 			if err != nil {
 				t.Fatalf("failed to install cluster ('kubeone install'): %v", err)
 			}
@@ -159,7 +201,18 @@ func TestClusterConformance(t *testing.T) {
 			// Run Terraform again for GCE to add nodes to the load balancer
 			if tc.provider == provisioner.GCE {
 				t.Log("Adding other control plane nodes to the load balancer…")
-				tf, err = pr.Provision()
+				args = []string{}
+				if osControlPlane != OperatingSystemDefault {
+					tfFlags, err := ControlPlaneImageFlags(tc.provider, osControlPlane)
+					if err != nil {
+						t.Fatalf("failed to discover control plane os image: %v", err)
+					}
+					args = append(args, tfFlags...)
+				}
+				if osWorkers != OperatingSystemDefault {
+					args = append(args, "-var", fmt.Sprintf("worker_os=%s", osWorkers))
+				}
+				tf, err = pr.Provision(args...)
 				if err != nil {
 					t.Fatalf("failed to provision the infrastructure: %v", err)
 				}

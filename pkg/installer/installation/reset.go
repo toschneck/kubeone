@@ -55,24 +55,61 @@ func Reset(s *state.State) error {
 }
 
 func destroyWorkers(s *state.State) error {
+	var lastErr error
 	s.Logger.Infoln("Destroying worker nodes…")
 
-	waitErr := wait.ExponentialBackoff(defaultRetryBackoff(3), func() (bool, error) {
-		err := kubeconfig.BuildKubernetesClientset(s)
-		return err == nil, errors.Wrap(err, "unable to build kubernetes clientset")
+	_ = wait.ExponentialBackoff(defaultRetryBackoff(3), func() (bool, error) {
+		lastErr = kubeconfig.BuildKubernetesClientset(s)
+		if lastErr != nil {
+			s.Logger.Warn("Unable to connect to the control plane API. Retrying…")
+			return false, nil
+		}
+		return true, nil
+
 	})
-	if waitErr != nil {
+	if lastErr != nil {
 		s.Logger.Warn("Unable to connect to the control plane API and destroy worker nodes")
 		s.Logger.Warn("You can skip destroying worker nodes and destroy them manually using `--destroy-workers=false`")
-		return waitErr
+		return errors.Wrap(lastErr, "unable to build kubernetes clientset")
 	}
 
-	waitErr = wait.ExponentialBackoff(defaultRetryBackoff(3), func() (bool, error) {
-		err := machinecontroller.DestroyWorkers(s)
-		return err == nil, errors.Wrap(err, "unable to delete all worker nodes")
+	_ = wait.ExponentialBackoff(defaultRetryBackoff(3), func() (bool, error) {
+		lastErr = machinecontroller.VerifyCRDs(s)
+		if lastErr != nil {
+			return false, nil
+		}
+		return true, nil
 	})
+	if lastErr != nil {
+		s.Logger.Info("Skipping deleting worker nodes because machine-controller CRDs are not deployed")
+		return nil
+	}
 
-	return waitErr
+	_ = wait.ExponentialBackoff(defaultRetryBackoff(3), func() (bool, error) {
+		lastErr = machinecontroller.DestroyWorkers(s)
+		if lastErr != nil {
+			s.Logger.Warn("Unable to destroy worker nodes. Retrying…")
+			return false, nil
+		}
+		return true, nil
+	})
+	if lastErr != nil {
+		return errors.Wrap(lastErr, "unable to delete all worker nodes")
+	}
+
+	_ = wait.ExponentialBackoff(defaultRetryBackoff(3), func() (bool, error) {
+		lastErr = machinecontroller.WaitDestroy(s)
+		if lastErr != nil {
+			s.Logger.Warn("Waiting for all machines to be deleted…")
+			return false, nil
+		}
+		return true, nil
+	})
+	if lastErr != nil {
+		return errors.Wrap(lastErr, "error waiting for machines to be deleted")
+	}
+
+	return nil
 }
 
 func resetNode(s *state.State, _ *kubeoneapi.HostConfig, conn ssh.Connection) error {
@@ -80,6 +117,7 @@ func resetNode(s *state.State, _ *kubeoneapi.HostConfig, conn ssh.Connection) er
 
 	_, _, err := s.Runner.Run(resetScript, runner.TemplateVariables{
 		"WORK_DIR": s.WorkDir,
+		"VERBOSE":  s.KubeadmVerboseFlag(),
 	})
 
 	return err
@@ -141,10 +179,10 @@ cni_ver=$(apt-cache madison kubernetes-cni | grep "{{ .CNI_VERSION }}" | head -1
 
 sudo apt-mark unhold kubelet kubeadm kubectl kubernetes-cni
 sudo apt-get remove --purge -y \
-     kubeadm=${kube_ver} \
-     kubectl=${kube_ver} \
-     kubelet=${kube_ver} \
-     kubernetes-cni=${cni_ver}
+	kubeadm=${kube_ver} \
+	kubectl=${kube_ver} \
+	kubelet=${kube_ver} \
+	kubernetes-cni=${cni_ver}
 `
 	removeBinariesCentOSCommand = `
 sudo yum remove -y \
@@ -160,7 +198,7 @@ sudo rm -rf /opt/cni /opt/bin/kubeadm /opt/bin/kubectl /opt/bin/kubelet
 sudo rm /etc/systemd/system/kubelet.service /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 `
 	resetScript = `
-sudo kubeadm reset --force || true
+sudo kubeadm {{ .VERBOSE }} reset --force || true
 sudo rm -f /etc/kubernetes/cloud-config
 sudo rm -rf /var/lib/etcd/
 rm -rf "{{ .WORK_DIR }}"

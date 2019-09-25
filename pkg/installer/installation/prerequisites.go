@@ -60,14 +60,20 @@ cat <<EOF | sudo tee /etc/kubeone/proxy-env
 {{ if .HTTP_PROXY -}}
 HTTP_PROXY="{{ .HTTP_PROXY }}"
 http_proxy="{{ .HTTP_PROXY }}"
+export HTTP_PROXY http_proxy
+
 {{ end }}
 {{- if .HTTPS_PROXY -}}
 HTTPS_PROXY="{{ .HTTPS_PROXY }}"
 https_proxy="{{ .HTTPS_PROXY }}"
+export HTTPS_PROXY https_proxy
+
 {{ end }}
 {{- if .NO_PROXY -}}
 NO_PROXY="{{ .NO_PROXY }}"
 no_proxy="{{ .NO_PROXY }}"
+export NO_PROXY no_proxy
+
 {{ end }}
 EOF
 	`
@@ -76,8 +82,8 @@ EOF
 sudo swapoff -a
 sudo sed -i '/.*swap.*/d' /etc/fstab
 
-source /etc/os-release
-source /etc/kubeone/proxy-env
+. /etc/os-release
+. /etc/kubeone/proxy-env
 
 # Short-Circuit the installation if it was already executed
 if type docker &>/dev/null && type kubelet &>/dev/null; then exit 0; fi
@@ -100,6 +106,7 @@ sudo apt-get install -y --no-install-recommends \
 	rsync \
 	tree
 
+{{ if .CONFIGURE_REPOSITORIES }}
 curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
 	sudo apt-key add -
 curl -fsSL https://download.docker.com/linux/${ID}/gpg | \
@@ -113,6 +120,7 @@ echo "deb [arch=amd64] https://download.docker.com/linux/${ID} $(lsb_release -sc
 echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | \
 	sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
+{{ end }}
 
 docker_ver=$(apt-cache madison docker-ce | \
 	grep "{{ .DOCKER_VERSION }}" | head -1 | awk '{print $3}')
@@ -139,7 +147,7 @@ sudo sed -i '/.*swap.*/d' /etc/fstab
 sudo setenforce 0 || true
 sudo sed -i s/SELINUX=enforcing/SELINUX=permissive/g /etc/sysconfig/selinux
 
-source /etc/kubeone/proxy-env
+. /etc/kubeone/proxy-env
 
 # Short-Circuit the installation if it was already executed
 if type docker &>/dev/null && type kubelet &>/dev/null; then exit 0; fi
@@ -150,6 +158,7 @@ net.bridge.bridge-nf-call-iptables = 1
 EOF
 sudo sysctl --system
 
+{{ if .CONFIGURE_REPOSITORIES }}
 cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
 name=Kubernetes
@@ -160,6 +169,7 @@ repo_gpgcheck=1
 gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 exclude=kube*
 EOF
+{{ end }}
 
 sudo yum install -y --disableexcludes=kubernetes \
 	docker kubelet-{{ .KUBERNETES_VERSION }}-0\
@@ -171,7 +181,7 @@ sudo systemctl enable --now kubelet
 `
 
 	kubeadmCoreOSScript = `
-source /etc/kubeone/proxy-env
+. /etc/kubeone/proxy-env
 
 # Short-Circuit the installation if it was already executed
 if type docker &>/dev/null && type kubelet &>/dev/null; then exit 0; fi
@@ -193,9 +203,13 @@ RELEASE="v{{ .KUBERNETES_VERSION }}"
 
 sudo mkdir -p /opt/bin
 cd /opt/bin
-sudo curl -L --remote-name-all \
-	https://storage.googleapis.com/kubernetes-release/release/${RELEASE}/bin/linux/amd64/{kubeadm,kubelet,kubectl}
-sudo chmod +x {kubeadm,kubelet,kubectl}
+k8s_rel_baseurl=https://storage.googleapis.com/kubernetes-release/release
+for binary in kubeadm kubelet kubectl; do
+	curl -L --output /tmp/$binary \
+		$k8s_rel_baseurl/${RELEASE}/bin/linux/amd64/$binary
+	sudo install --owner=0 --group=0 --mode=0755 /tmp/$binary /opt/bin/$binary
+	rm /tmp/$binary
+done
 
 curl -sSL "https://raw.githubusercontent.com/kubernetes/kubernetes/${RELEASE}/build/debs/kubelet.service" | \
 	sed "s:/usr/bin:/opt/bin:g" | \
@@ -283,7 +297,7 @@ func installPrerequisitesOnNode(s *state.State, node *kubeoneapi.HostConfig, con
 }
 
 func determineOS(s *state.State) (string, error) {
-	osID, _, err := s.Runner.Run("source /etc/os-release && echo -n $ID", nil)
+	osID, _, err := s.Runner.Run(". /etc/os-release && echo -n $ID", nil)
 	return osID, err
 }
 
@@ -315,15 +329,12 @@ func installKubeadm(s *state.State, node kubeoneapi.HostConfig) error {
 	switch node.OperatingSystem {
 	case "ubuntu", "debian":
 		err = installKubeadmDebian(s)
-
 	case "coreos":
 		err = installKubeadmCoreOS(s)
-
 	case "centos":
 		err = installKubeadmCentOS(s)
-
 	default:
-		err = errors.Errorf("'%s' is not a supported operating system", node.OperatingSystem)
+		err = errors.Errorf("%q is not a supported operating system", node.OperatingSystem)
 	}
 
 	return err
@@ -331,9 +342,10 @@ func installKubeadm(s *state.State, node kubeoneapi.HostConfig) error {
 
 func installKubeadmDebian(s *state.State) error {
 	_, _, err := s.Runner.Run(kubeadmDebianScript, runner.TemplateVariables{
-		"KUBERNETES_VERSION": s.Cluster.Versions.Kubernetes,
-		"DOCKER_VERSION":     dockerVersion,
-		"CNI_VERSION":        s.Cluster.Versions.KubernetesCNIVersion(),
+		"KUBERNETES_VERSION":     s.Cluster.Versions.Kubernetes,
+		"DOCKER_VERSION":         dockerVersion,
+		"CNI_VERSION":            s.Cluster.Versions.KubernetesCNIVersion(),
+		"CONFIGURE_REPOSITORIES": s.Cluster.SystemPackages.ConfigureRepositories,
 	})
 
 	return errors.WithStack(err)
@@ -341,8 +353,9 @@ func installKubeadmDebian(s *state.State) error {
 
 func installKubeadmCentOS(s *state.State) error {
 	_, _, err := s.Runner.Run(kubeadmCentOSScript, runner.TemplateVariables{
-		"KUBERNETES_VERSION": s.Cluster.Versions.Kubernetes,
-		"CNI_VERSION":        s.Cluster.Versions.KubernetesCNIVersion(),
+		"KUBERNETES_VERSION":     s.Cluster.Versions.Kubernetes,
+		"CNI_VERSION":            s.Cluster.Versions.KubernetesCNIVersion(),
+		"CONFIGURE_REPOSITORIES": s.Cluster.SystemPackages.ConfigureRepositories,
 	})
 	return err
 }

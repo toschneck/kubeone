@@ -450,7 +450,7 @@ features:
   podSecurityPolicy:
     enable: {{ .EnablePodSecurityPolicy }}
   # Enables and configures audit log backend.
-  # More info: https://kubernetes.io/docs/tasks/debug-application-cluster/audit/#log-backend  
+  # More info: https://kubernetes.io/docs/tasks/debug-application-cluster/audit/#log-backend
   staticAuditLog:
     enable: {{ .EnableStaticAuditLog }}
     config:
@@ -519,6 +519,10 @@ features:
       # be used.
       caFile: ""
 
+systemPackages:
+  # will add Docker and Kubernetes repositories to OS package manager
+  configureRepositories: true # it's true by default
+
 # The list of nodes can be overwritten by providing Terraform output.
 # You are strongly encouraged to provide an odd number of nodes and
 # have at least three of them.
@@ -528,6 +532,7 @@ features:
 #   privateAddress: '172.18.0.1'
 #   bastion: '4.3.2.1'
 #   bastionPort: 22  # can be left out if using the default (22)
+#   bastionUser: 'root'  # can be left out if using the default ('root')
 #   sshPort: 22 # can be left out if using the default (22)
 #   sshUsername: ubuntu
 #   # You usually want to configure either a private key OR an

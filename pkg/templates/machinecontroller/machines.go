@@ -124,12 +124,16 @@ func createMachineDeployment(cluster *kubeoneapi.KubeOneCluster, workerset kubeo
 					Labels:    labels.Merge(workerset.Config.Labels, workersetNameLabels),
 				},
 				Spec: clusterv1alpha1.MachineSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: labels.Merge(workerset.Config.Labels, workersetNameLabels),
+					},
 					Versions: clusterv1alpha1.MachineVersionInfo{
 						Kubelet: cluster.Versions.Kubernetes,
 					},
 					ProviderSpec: clusterv1alpha1.ProviderSpec{
 						Value: &runtime.RawExtension{Raw: encoded},
 					},
+					Taints: workerset.Config.Taints,
 				},
 			},
 		},
