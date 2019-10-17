@@ -76,8 +76,13 @@ export NO_PROXY no_proxy
 
 {{ end }}
 EOF
-	`
 
+envtmp=/tmp/k1-etc-environment
+grep -v '#kubeone$' /etc/environment > $envtmp || true
+set +o pipefail # grep exits non-zero without match
+grep = /etc/kubeone/proxy-env | sed 's/$/#kubeone/' >> $envtmp
+sudo tee /etc/environment < $envtmp
+`
 	kubeadmDebianScript = `
 sudo swapoff -a
 sudo sed -i '/.*swap.*/d' /etc/fstab
@@ -97,7 +102,7 @@ cat <<EOF | sudo tee /etc/docker/daemon.json
 EOF
 
 sudo apt-get update
-sudo apt-get install -y --no-install-recommends \
+sudo DEBIAN_FRONTEND=noninteractive apt-get install --option "Dpkg::Options::=--force-confold" -y --no-install-recommends \
 	apt-transport-https \
 	ca-certificates \
 	curl \
@@ -130,7 +135,7 @@ cni_ver=$(apt-cache madison kubernetes-cni | \
 	grep "{{ .CNI_VERSION }}" | head -1 | awk '{print $3}')
 
 sudo apt-mark unhold docker-ce kubelet kubeadm kubectl kubernetes-cni
-sudo apt-get install -y --no-install-recommends \
+sudo DEBIAN_FRONTEND=noninteractive apt-get install --option "Dpkg::Options::=--force-confold" -y --no-install-recommends \
 	docker-ce=${docker_ver} \
 	kubeadm=${kube_ver} \
 	kubectl=${kube_ver} \
