@@ -5,7 +5,7 @@ Azure. We'll cover how to create the needed infrastructure using our example
 Terraform scripts and then install Kubernetes. Finally, we're going to show how
 to destroy the cluster along with the infrastructure.
 
-As a result, you'll get Kubernetes 1.14.2 High-Available (HA) clusters with
+As a result, you'll get Kubernetes 1.16.1 High-Available (HA) clusters with
 three control plane nodes and two worker nodes.
 
 ### Prerequisites
@@ -117,13 +117,6 @@ required to run:
 terraform refresh
 ```
 
-Once it's done you need to create a Terraform state file that is parsed by
-KubeOne:
-
-```bash
-terraform output -json > tf.json
-```
-
 ## Installing Kubernetes
 
 Now that you have infrastructure you can proceed with installing Kubernetes
@@ -134,7 +127,7 @@ will be installed, e.g. what version will be used and what features will be
 enabled. For the configuration file reference run `kubeone config print --full`.
 
 To get started you can use the following configuration. It'll install Kubernetes
-1.14.2 and create 1 worker nodes. KubeOne automatically populates information
+1.16.1 and create one worker node. KubeOne automatically populates information
 about template, VM size and networking settings for worker nodes from the
 Terraform output. Alternatively, you can set those information manually. As
 KubeOne is using [Kubermatic `machine-controller`][7] for creating worker nodes,
@@ -142,14 +135,14 @@ see [Azure example manifest][8] for available options.
 
 For Azure you also need to provide a `cloud-config` file containing credentials,
 so Azure Cloud Controller Manager works as expected. Make sure to replace sample
-values with real values.
+values with real values. For example, to create a cluster with Kubernetes
+`1.16.1`, save the following to `config.yaml`:
 
 ```yaml
 apiVersion: kubeone.io/v1alpha1
 kind: KubeOneCluster
-
 versions:
-  kubernetes: '1.14.2'
+  kubernetes: '1.16.1'
 cloudProvider:
   name: 'azure'
   cloudConfig: |
@@ -175,8 +168,18 @@ Finally, we're going to install Kubernetes by using the `install` command and
 providing the configuration file and the Terraform output:
 
 ```bash
-kubeone install config.yaml --tfjson tf.json
+kubeone install config.yaml --tfjson <DIR-WITH-tfstate-FILE>
 ```
+
+**Note:** `--tfjson` accepts a file as well as a directory containing the
+terraform state file. To pass a file, generate the JSON output by running the
+following and use it as the value for the `--tfjson` flag:
+```bash
+terraform output -json > tf.json
+```
+
+Alternatively, if the terraform state file is in the current working directory
+ `--tfjson .` can be used as well.
 
 The installation process takes some time, usually 5-10 minutes. The output
 should look like the following one:
@@ -254,7 +257,7 @@ returning an error such as:
 ```
 The machinedeployments "pool1" is invalid: metadata.resourceVersion: Invalid value: 0x0: must be specified for an update
 ```
-For a workaround, please follow the steps described in the [issue 593][scale_issue].
+For a workaround, please follow the steps described in the [issue 593][scale_issue] or upgrade to `kubectl` 1.16 or newer.
 
 ## Deleting The Cluster
 
@@ -262,7 +265,7 @@ Before deleting a cluster you should clean up all MachineDeployments, so all
 worker nodes are deleted. You can do it with the `kubeone reset` command:
 
 ```bash
-kubeone reset config.yaml --tfjson tf.json
+kubeone reset config.yaml --tfjson <DIR-WITH-tfstate-FILE>
 ```
 
 This command will wait for all worker nodes to be gone. Once it's done you can
@@ -274,7 +277,7 @@ terraform destroy
 
 You'll be asked to enter `yes` to confirm your intention to destroy the cluster.
 
-Congratulations! You're now running Kubernetes 1.14.2 HA cluster with three
+Congratulations! You're now running Kubernetes 1.16.1 HA cluster with three
 control plane nodes and two worker nodes. If you want to learn more about
 KubeOne and its features, such as [upgrades](upgrading_cluster.md), make sure to
 check our [documentation][9].
