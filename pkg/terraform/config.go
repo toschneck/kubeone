@@ -228,6 +228,8 @@ func (c *Config) updateAWSWorkerset(existingWorkerSet *kubeonev1alpha1.WorkerCon
 		{key: "subnetId", value: awsCloudConfig.SubnetID},
 		{key: "tags", value: awsCloudConfig.Tags},
 		{key: "vpcId", value: awsCloudConfig.VPCID},
+		{key: "isSpotInstance", value: awsCloudConfig.IsSpotInstance},
+		{key: "ebsVolumeEncrypted", value: awsCloudConfig.EBSVolumeEncrypted},
 	}
 
 	for _, flag := range flags {
@@ -366,6 +368,7 @@ func (c *Config) updateOpenStackWorkerset(existingWorkerSet *kubeonev1alpha1.Wor
 		{key: "subnet", value: openstackConfig.Subnet},
 		{key: "rootDiskSizeGB", value: openstackConfig.RootDiskSizeGB},
 		{key: "nodeVolumeAttachLimit", value: openstackConfig.NodeVolumeAttachLimit},
+		{key: "trustDevicePath", value: openstackConfig.TrustDevicePath},
 		{key: "tags", value: openstackConfig.Tags},
 	}
 
@@ -389,6 +392,7 @@ func (c *Config) updatePacketWorkerset(existingWorkerSet *kubeonev1alpha1.Worker
 		{key: "projectID", value: packetConfig.ProjectID},
 		{key: "facilities", value: packetConfig.Facilities},
 		{key: "instanceType", value: packetConfig.InstanceType},
+		{key: "tags", value: packetConfig.Tags},
 	}
 
 	for _, flag := range flags {
@@ -413,6 +417,7 @@ func (c *Config) updateVSphereWorkerset(existingWorkerSet *kubeonev1alpha1.Worke
 		{key: "cpus", value: vsphereConfig.CPUs},
 		{key: "datacenter", value: vsphereConfig.Datacenter},
 		{key: "datastore", value: vsphereConfig.Datastore},
+		{key: "datastoreCluster", value: vsphereConfig.DatastoreCluster},
 		{key: "diskSizeGB", value: vsphereConfig.DiskSizeGB},
 		{key: "folder", value: vsphereConfig.Folder},
 		{key: "memoryMB", value: vsphereConfig.MemoryMB},

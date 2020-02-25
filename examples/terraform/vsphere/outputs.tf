@@ -61,7 +61,9 @@ output "kubeone_workers" {
           cluster       = var.compute_cluster_name
           cpus          = 2
           datacenter    = var.dc_name
+          # Either Datastore or DatastoreCluster have to be provided.
           datastore     = var.datastore_name
+          datastoreCluster = var.datastore_cluster_name
           # Optional: Resize the root disk to this size. Must be bigger than the existing size
           # Default is to leave the disk at the same size as the template
           diskSizeGB     = 10

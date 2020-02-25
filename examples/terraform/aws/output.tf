@@ -72,7 +72,9 @@ output "kubeone_workers" {
           diskSize         = 50
           diskType         = "gp2"
           ## Only applicable if diskType = io1
-          diskIops = 500
+          diskIops         = 500
+          isSpotInstance   = false
+          ebsVolumeEncrypted = false
           tags = {
             "${var.cluster_name}-workers" = ""
           }
@@ -103,7 +105,9 @@ output "kubeone_workers" {
           diskSize         = 50
           diskType         = "gp2"
           ## Only applicable if diskType = io1
-          diskIops = 500
+          diskIops         = 500
+          isSpotInstance   = false
+          ebsVolumeEncrypted = false
           tags = {
             "${var.cluster_name}-workers" = ""
           }
@@ -134,7 +138,9 @@ output "kubeone_workers" {
           diskSize         = 50
           diskType         = "gp2"
           ## Only applicable if diskType = io1
-          diskIops = 500
+          diskIops         = 500
+          isSpotInstance   = false
+          ebsVolumeEncrypted = false
           tags = {
             "${var.cluster_name}-workers" = ""
           }
