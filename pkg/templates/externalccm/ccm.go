@@ -18,20 +18,17 @@ package externalccm
 
 import (
 	"context"
-	"strings"
 	"time"
 
-	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 
 	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
 	"github.com/kubermatic/kubeone/pkg/state"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -56,6 +53,8 @@ func Ensure(s *state.State) error {
 		err = ensureDigitalOcean(s)
 	case kubeoneapi.CloudProviderNamePacket:
 		err = ensurePacket(s)
+	case kubeoneapi.CloudProviderNameOpenStack:
+		err = ensureOpenStack(s)
 	default:
 		s.Logger.Infof("External CCM for %q not yet supported, skipping", s.Cluster.CloudProvider.Name)
 		return nil
@@ -74,11 +73,10 @@ func waitForInitializedNodes(s *state.State) error {
 
 	s.Logger.Info("Waiting for nodes to initialize by CCM…")
 
-	return wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+	return wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
 		nodes := corev1.NodeList{}
-		nodeListOpts := dynclient.ListOptions{}
 
-		if err := s.DynamicClient.List(ctx, &nodeListOpts, &nodes); err != nil {
+		if err := s.DynamicClient.List(ctx, &nodes); err != nil {
 			return false, err
 		}
 
@@ -94,37 +92,22 @@ func waitForInitializedNodes(s *state.State) error {
 	})
 }
 
-func mutateDeploymentWithVersionCheck(want *semver.Constraints) func(obj runtime.Object) error {
-	return func(obj runtime.Object) error {
-		dep, ok := obj.(*appsv1.Deployment)
-		if !ok {
-			return errors.Errorf("unknown object type %T passed", obj)
-		}
-
-		if dep.ObjectMeta.CreationTimestamp.IsZero() {
-			// let it create deployment
-			return nil
-		}
-
-		if len(dep.Spec.Template.Spec.Containers) != 1 {
-			return errors.New("unable to choose a CCM container, as number of containers > 1")
-		}
-
-		imageSpec := strings.SplitN(dep.Spec.Template.Spec.Containers[0].Image, ":", 2)
-		if len(imageSpec) != 2 {
-			return errors.New("unable to grab CCM image version")
-		}
-
-		existing, err := semver.NewVersion(imageSpec[1])
-		if err != nil {
-			return errors.Wrap(err, "failed to parse deployed CCM version")
-		}
-
-		if !want.Check(existing) {
-			return errors.New("newer version deployed, skipping")
-		}
-
-		// OK to update the deployment
-		return nil
+func genClusterRoleBinding(name string, crole *rbacv1.ClusterRole, subj *corev1.ServiceAccount) *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     crole.GetName(),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      subj.GetName(),
+				Namespace: subj.GetNamespace(),
+			},
+		},
 	}
 }

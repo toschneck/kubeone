@@ -33,6 +33,10 @@ import (
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
 
+const (
+	metricsServerImage = `k8s.gcr.io/metrics-server:v0.3.6`
+)
+
 // Deploy generate and POST all objects to apiserver
 func Deploy(s *state.State) error {
 	if s.DynamicClient == nil {
@@ -74,7 +78,7 @@ func aggregatedMetricsReaderClusterRole() *rbacv1.ClusterRole {
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"metrics.k8s.io"},
-				Resources: []string{"pods"},
+				Resources: []string{"pods", "nodes"},
 				Verbs:     []string{"get", "list", "watch"},
 			},
 		},
@@ -169,6 +173,11 @@ func metricsServerDeployment() *appsv1.Deployment {
 					Labels: k8sAppLabels,
 				},
 				Spec: corev1.PodSpec{
+					Tolerations: []corev1.Toleration{
+						{
+							Operator: corev1.TolerationOpExists,
+						},
+					},
 					ServiceAccountName: "metrics-server",
 					Volumes: []corev1.Volume{
 						{
@@ -181,7 +190,7 @@ func metricsServerDeployment() *appsv1.Deployment {
 					Containers: []corev1.Container{
 						{
 							Name:            "metrics-server",
-							Image:           "k8s.gcr.io/metrics-server-amd64:v0.3.1",
+							Image:           metricsServerImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Args: []string{
 								"--kubelet-insecure-tls",
@@ -207,7 +216,8 @@ func metricsServerService() *corev1.Service {
 			Name:      "metrics-server",
 			Namespace: metav1.NamespaceSystem,
 			Labels: map[string]string{
-				"kubernetes.io/name": "Metrics-server",
+				"kubernetes.io/name":            "Metrics-server",
+				"kubernetes.io/cluster-service": "true",
 			},
 		},
 		Spec: corev1.ServiceSpec{
@@ -234,7 +244,7 @@ func metricServerClusterRole() *rbacv1.ClusterRole {
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{""},
-				Resources: []string{"pods", "nodes", "nodes/stats"},
+				Resources: []string{"pods", "nodes", "nodes/stats", "namespaces"},
 				Verbs:     []string{"get", "list", "watch"},
 			},
 		},

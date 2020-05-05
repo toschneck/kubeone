@@ -26,7 +26,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	yaml "gopkg.in/yaml.v2"
 
 	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
@@ -39,43 +38,43 @@ import (
 
 const (
 	// defaultKubernetesVersion is default Kubernetes version for the example configuration file
-	defaultKubernetesVersion = "1.16.1"
+	defaultKubernetesVersion = "1.18.2"
 	// defaultCloudProviderName is cloud provider to build the example configuration file for
 	defaultCloudProviderName = "aws"
 )
 
-type printOptions struct {
-	globalOptions
-	FullConfig bool
+type printOpts struct {
+	FullConfig bool `longflag:"full" shortflag:"f"`
 
-	ClusterName       string
-	KubernetesVersion string
+	ClusterName       string `longflag:"cluster-name" shortflag:"n"`
+	KubernetesVersion string `longflag:"kubernetes-version" shortflag:"k"`
 
-	CloudProviderName     string
+	CloudProviderName     string `longflag:"provider" shortflag:"p"`
 	CloudProviderExternal bool
 	CloudProviderCloudCfg string
 
-	Hosts string
+	Hosts string `longflag:"hosts"`
 
-	APIEndpointHost string
-	APIEndpointPort int
+	APIEndpointHost string `longflag:"api-endpoint-host"`
+	APIEndpointPort int    `longflag:"api-endpoint-port"`
 
-	PodSubnet     string
-	ServiceSubnet string
-	ServiceDNS    string
-	NodePortRange string
+	PodSubnet     string `longflag:"pod-subnet"`
+	ServiceSubnet string `longflag:"service-subnet"`
+	ServiceDNS    string `longflag:"service-dns"`
+	NodePortRange string `longflag:"node-port-range"`
 
-	HTTPProxy  string
-	HTTPSProxy string
-	NoProxy    string
+	HTTPProxy  string `longflag:"proxy-http"`
+	HTTPSProxy string `longflag:"proxy-https"`
+	NoProxy    string `longflag:"proxy-no-proxy"`
 
-	EnablePodSecurityPolicy bool
-	EnableStaticAuditLog    bool
-	EnableDynamicAuditLog   bool
-	EnableMetricsServer     bool
-	EnableOpenIDConnect     bool
+	EnablePodSecurityPolicy bool `longflag:"enable-pod-security-policy"`
+	EnablePodPresets        bool `longflag:"enable-pod-presets"`
+	EnableStaticAuditLog    bool `longflag:"enable-static-audit-log"`
+	EnableDynamicAuditLog   bool `longflag:"enable-dynamic-audit-log"`
+	EnableMetricsServer     bool `longflag:"enable-metrics-server"`
+	EnableOpenIDConnect     bool `longflag:"enable-openid-connect"`
 
-	DeployMachineController bool
+	DeployMachineController bool `longflag:"deploy-machine-controller"`
 }
 
 type migrateOptions struct {
@@ -84,92 +83,113 @@ type migrateOptions struct {
 }
 
 // configCmd setups the config command
-func configCmd(rootFlags *pflag.FlagSet) *cobra.Command {
+func configCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Commands for working with the KubeOneCluster configuration manifests",
 	}
 
-	cmd.AddCommand(printCmd(rootFlags))
-	cmd.AddCommand(migrateCmd(rootFlags))
+	cmd.AddCommand(printCmd())
+	cmd.AddCommand(migrateCmd())
 
 	return cmd
 }
 
 // printCmd setups the print command
-func printCmd(_ *pflag.FlagSet) *cobra.Command {
-	pOpts := &printOptions{}
+func printCmd() *cobra.Command {
+	opts := &printOpts{}
 	cmd := &cobra.Command{
 		Use:   "print",
 		Short: "Print an example configuration manifest",
 		Long: `
-Print an example configuration manifest. Using the appropriate flags you can customize the configuration manifest.
-For the full reference of the configuration manifest, run the print command with --full flag.
+Print an example configuration manifest. Using the appropriate flags you can
+customize the configuration manifest. For the full reference of the
+configuration manifest, run the print command with --full flag.
 `,
 		Args:    cobra.ExactArgs(0),
 		Example: fmt.Sprintf("kubeone config print --provider digitalocean --kubernetes-version %s --cluster-name example", defaultKubernetesVersion),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return runPrint(pOpts)
+			return runPrint(opts)
 		},
 	}
 
 	// General
-	cmd.Flags().BoolVarP(&pOpts.FullConfig, "full", "f", false, "show full manifest")
+	cmd.Flags().BoolVarP(
+		&opts.FullConfig,
+		longFlagName(opts, "FullConfig"),
+		shortFlagName(opts, "FullConfig"),
+		false,
+		"show full manifest")
 
-	cmd.Flags().StringVarP(&pOpts.ClusterName, "cluster-name", "n", "demo-cluster", "cluster name")
-	cmd.Flags().StringVarP(&pOpts.KubernetesVersion, "kubernetes-version", "k", defaultKubernetesVersion, "Kubernetes version")
-	cmd.Flags().StringVarP(&pOpts.CloudProviderName, "provider", "p", defaultCloudProviderName, "cloud provider name (aws, digitalocean, gce, hetzner, packet, openstack, vsphere, none)")
+	cmd.Flags().StringVarP(
+		&opts.ClusterName,
+		longFlagName(opts, "ClusterName"),
+		shortFlagName(opts, "ClusterName"),
+		"demo-cluster",
+		"cluster name")
+
+	cmd.Flags().StringVarP(
+		&opts.KubernetesVersion,
+		longFlagName(opts, "KubernetesVersion"),
+		shortFlagName(opts, "KubernetesVersion"),
+		defaultKubernetesVersion,
+		"Kubernetes version")
+
+	cmd.Flags().StringVarP(
+		&opts.CloudProviderName,
+		longFlagName(opts, "CloudProviderName"),
+		shortFlagName(opts, "CloudProviderName"),
+		defaultCloudProviderName,
+		"cloud provider name (aws, digitalocean, gce, hetzner, packet, openstack, vsphere, none)")
 
 	// Hosts
-	cmd.Flags().StringVarP(&pOpts.Hosts, "hosts", "", "", "hosts in format of comma-separated key:value list, example: publicAddress:192.168.0.100,privateAddress:192.168.1.100,sshUsername:ubuntu,sshPort:22. Use quoted string of space separated values for multiple hosts")
+	cmd.Flags().StringVar(&opts.Hosts, longFlagName(opts, "Hosts"), "", "hosts in format of comma-separated key:value list, example: publicAddress:192.168.0.100,privateAddress:192.168.1.100,sshUsername:ubuntu,sshPort:22. Use quoted string of space separated values for multiple hosts")
 
 	// API endpoint
-	cmd.Flags().StringVarP(&pOpts.APIEndpointHost, "api-endpoint-host", "", "", "API endpoint hostname or address")
-	cmd.Flags().IntVarP(&pOpts.APIEndpointPort, "api-endpoint-port", "", 0, "API endpoint port")
+	cmd.Flags().StringVar(&opts.APIEndpointHost, longFlagName(opts, "APIEndpointHost"), "", "API endpoint hostname or address")
+	cmd.Flags().IntVar(&opts.APIEndpointPort, longFlagName(opts, "APIEndpointPort"), 6443, "API endpoint port")
 
 	// Cluster networking
-	cmd.Flags().StringVarP(&pOpts.PodSubnet, "pod-subnet", "", "", "Subnet to be used for pods networking")
-	cmd.Flags().StringVarP(&pOpts.ServiceSubnet, "service-subnet", "", "", "Subnet to be used for Services")
-	cmd.Flags().StringVarP(&pOpts.ServiceDNS, "service-dns", "", "", "Domain name to be used for Services")
-	cmd.Flags().StringVarP(&pOpts.NodePortRange, "node-port-range", "", "", "Port range to be used for NodePort")
+	cmd.Flags().StringVar(&opts.PodSubnet, longFlagName(opts, "PodSubnet"), "", "Subnet to be used for pods networking")
+	cmd.Flags().StringVar(&opts.ServiceSubnet, longFlagName(opts, "ServiceSubnet"), "", "Subnet to be used for Services")
+	cmd.Flags().StringVar(&opts.ServiceDNS, longFlagName(opts, "ServiceDNS"), "", "Domain name to be used for Services")
+	cmd.Flags().StringVar(&opts.NodePortRange, longFlagName(opts, "NodePortRange"), "", "Port range to be used for NodePort")
 
 	// Proxy
-	cmd.Flags().StringVarP(&pOpts.HTTPProxy, "proxy-http", "", "", "HTTP proxy to be used for provisioning and Docker")
-	cmd.Flags().StringVarP(&pOpts.HTTPSProxy, "proxy-https", "", "", "HTTPs proxy to be used for provisioning and Docker")
-	cmd.Flags().StringVarP(&pOpts.NoProxy, "proxy-no-proxy", "", "", "No Proxy to be used for provisioning and Docker")
+	cmd.Flags().StringVar(&opts.HTTPProxy, longFlagName(opts, "HTTPProxy"), "", "HTTP proxy to be used for provisioning and Docker")
+	cmd.Flags().StringVar(&opts.HTTPSProxy, longFlagName(opts, "HTTPSProxy"), "", "HTTPs proxy to be used for provisioning and Docker")
+	cmd.Flags().StringVar(&opts.NoProxy, longFlagName(opts, "NoProxy"), "", "No Proxy to be used for provisioning and Docker")
 
 	// Features
-	cmd.Flags().BoolVarP(&pOpts.EnablePodSecurityPolicy, "enable-pod-security-policy", "", false, "enable PodSecurityPolicy")
-	cmd.Flags().BoolVarP(&pOpts.EnableStaticAuditLog, "enable-static-audit-log", "", false, "enable StaticAuditLog")
-	cmd.Flags().BoolVarP(&pOpts.EnableDynamicAuditLog, "enable-dynamic-audit-log", "", false, "enable DynamicAuditLog")
-	cmd.Flags().BoolVarP(&pOpts.EnableMetricsServer, "enable-metrics-server", "", true, "enable metrics-server")
-	cmd.Flags().BoolVarP(&pOpts.EnableOpenIDConnect, "enable-openid-connect", "", false, "enable OpenID Connect authentication")
+	cmd.Flags().BoolVar(&opts.EnablePodSecurityPolicy, longFlagName(opts, "EnablePodSecurityPolicy"), false, "enable PodSecurityPolicy")
+	cmd.Flags().BoolVar(&opts.EnablePodPresets, longFlagName(opts, "EnablePodPresets"), false, "enable PodPresets")
+	cmd.Flags().BoolVar(&opts.EnableStaticAuditLog, longFlagName(opts, "EnableStaticAuditLog"), false, "enable StaticAuditLog")
+	cmd.Flags().BoolVar(&opts.EnableDynamicAuditLog, longFlagName(opts, "EnableDynamicAuditLog"), false, "enable DynamicAuditLog")
+	cmd.Flags().BoolVar(&opts.EnableMetricsServer, longFlagName(opts, "EnableMetricsServer"), true, "enable metrics-server")
+	cmd.Flags().BoolVar(&opts.EnableOpenIDConnect, longFlagName(opts, "EnableOpenIDConnect"), false, "enable OpenID Connect authentication")
 
 	// MachineController
-	cmd.Flags().BoolVarP(&pOpts.DeployMachineController, "deploy-machine-controller", "", true, "deploy kubermatic machine-controller")
+	cmd.Flags().BoolVar(&opts.DeployMachineController, longFlagName(opts, "DeployMachineController"), true, "deploy kubermatic machine-controller")
 
 	return cmd
 }
 
 // migrateCmd setups the migrate command
-func migrateCmd(_ *pflag.FlagSet) *cobra.Command {
-	mOpts := &migrateOptions{}
+func migrateCmd() *cobra.Command {
+	opts := &migrateOptions{}
 	cmd := &cobra.Command{
 		Use:   "migrate <cluster-manifest>",
 		Short: "Migrate the pre-v0.6.0 configuration manifest to the KubeOneCluster manifest",
 		Long: `
-Migrate the pre-v0.6.0 KubeOne configuration manifest to the KubeOneCluster manifest used as of v0.6.0.
-The new manifest is printed on the standard output.
+Migrate the pre-v0.6.0 KubeOne configuration manifest to the KubeOneCluster
+manifest used as of v0.6.0. The new manifest is printed on the standard output.
 `,
 		Args:    cobra.ExactArgs(1),
 		Example: `kubeone config migrate mycluster.yaml`,
 		RunE: func(_ *cobra.Command, args []string) error {
-			mOpts.Manifest = args[0]
-			if mOpts.Manifest == "" {
-				return errors.New("no cluster config file given")
-			}
+			opts.Manifest = args[0]
 
-			return runMigrate(mOpts)
+			return runMigrate(opts)
 		},
 	}
 
@@ -177,7 +197,7 @@ The new manifest is printed on the standard output.
 }
 
 // runPrint prints an example configuration file
-func runPrint(printOptions *printOptions) error {
+func runPrint(printOptions *printOpts) error {
 	if printOptions.FullConfig {
 		p := kubeoneapi.CloudProviderName(printOptions.CloudProviderName)
 		switch p {
@@ -223,7 +243,7 @@ func runPrint(printOptions *printOptions) error {
 	return nil
 }
 
-func createAndPrintManifest(printOptions *printOptions) error {
+func createAndPrintManifest(printOptions *printOpts) error {
 	cfg := &yamled.Document{}
 
 	// API data
@@ -292,6 +312,9 @@ func createAndPrintManifest(printOptions *printOptions) error {
 	if printOptions.EnablePodSecurityPolicy {
 		cfg.Set(yamled.Path{"features", "podSecurityPolicy", "enable"}, printOptions.EnablePodSecurityPolicy)
 	}
+	if printOptions.EnablePodPresets {
+		cfg.Set(yamled.Path{"features", "podPresets", "enable"}, printOptions.EnablePodPresets)
+	}
 	if printOptions.EnableDynamicAuditLog {
 		cfg.Set(yamled.Path{"features", "dynamicAuditLog", "enable"}, printOptions.EnableDynamicAuditLog)
 	}
@@ -300,7 +323,6 @@ func createAndPrintManifest(printOptions *printOptions) error {
 	}
 	if printOptions.EnableOpenIDConnect {
 		cfg.Set(yamled.Path{"features", "openidConnect", "enable"}, printOptions.EnableOpenIDConnect)
-
 		cfg.Set(yamled.Path{"features", "openidConnect", "config", "issuerUrl"}, "")
 		cfg.Set(yamled.Path{"features", "openidConnect", "config", "clientId"}, "")
 		cfg.Set(yamled.Path{"features", "openidConnect", "config", "usernameClaim"}, "")
@@ -422,6 +444,7 @@ clusterNetwork:
     # possible values:
     # * canal
     # * weave-net
+    # * external - The CNI plugin can be installed as Addon or manually
     provider: canal
     # when selected CNI provider support encryption and encrypted: true is
     # set, secret will be automatically generated and referenced in appropriate
@@ -449,6 +472,9 @@ features:
   # 'kube-system' namespace pods to 'use' it.
   podSecurityPolicy:
     enable: {{ .EnablePodSecurityPolicy }}
+  # Enables PodPresets admission plugin in API server.
+  podPresets:
+    enable: {{ .EnablePodPresets }}
   # Enables and configures audit log backend.
   # More info: https://kubernetes.io/docs/tasks/debug-application-cluster/audit/#log-backend
   staticAuditLog:
@@ -523,6 +549,13 @@ systemPackages:
   # will add Docker and Kubernetes repositories to OS package manager
   configureRepositories: true # it's true by default
 
+# Addons are Kubernetes manifests to be deployed after provisioning the cluster
+addons:
+  enable: false
+  # In case when the relative path is provided, the path is relative
+  # to the KubeOne configuration file.
+  path: "./addons"
+
 # The list of nodes can be overwritten by providing Terraform output.
 # You are strongly encouraged to provide an odd number of nodes and
 # have at least three of them.
@@ -530,6 +563,25 @@ systemPackages:
 # hosts:
 # - publicAddress: '1.2.3.4'
 #   privateAddress: '172.18.0.1'
+#   bastion: '4.3.2.1'
+#   bastionPort: 22  # can be left out if using the default (22)
+#   bastionUser: 'root'  # can be left out if using the default ('root')
+#   sshPort: 22 # can be left out if using the default (22)
+#   sshUsername: ubuntu
+#   # You usually want to configure either a private key OR an
+#   # agent socket, but never both. The socket value can be
+#   # prefixed with "env:" to refer to an environment variable.
+#   sshPrivateKeyFile: '/home/me/.ssh/id_rsa'
+#   sshAgentSocket: 'env:SSH_AUTH_SOCK'
+#   # setting this to true will skip node-role.kubernetes.io/master taint from
+#   # Node object on this host
+#   untaint: false
+
+# A list of static workers, not managed by MachineController.
+# The list of nodes can be overwritten by providing Terraform output.
+# staticWorkers:
+# - publicAddress: '1.2.3.5'
+#   privateAddress: '172.18.0.2'
 #   bastion: '4.3.2.1'
 #   bastionPort: 22  # can be left out if using the default (22)
 #   bastionUser: 'root'  # can be left out if using the default ('root')

@@ -18,6 +18,7 @@ package credentials
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -33,9 +34,9 @@ import (
 const (
 	// Variables that KubeOne (and Terraform) expect to see
 	AWSAccessKeyID          = "AWS_ACCESS_KEY_ID"
-	AWSSecretAccessKey      = "AWS_SECRET_ACCESS_KEY"
+	AWSSecretAccessKey      = "AWS_SECRET_ACCESS_KEY" //nolint:gosec
 	AzureClientID           = "ARM_CLIENT_ID"
-	AzureClientSecret       = "ARM_CLIENT_SECRET"
+	AzureClientSecret       = "ARM_CLIENT_SECRET" //nolint:gosec
 	AzureTenantID           = "ARM_TENANT_ID"
 	AzureSubscribtionID     = "ARM_SUBSCRIPTION_ID"
 	DigitalOceanTokenKey    = "DIGITALOCEAN_TOKEN"
@@ -56,7 +57,7 @@ const (
 
 	// Variables that machine-controller expects
 	AzureClientIDMC           = "AZURE_CLIENT_ID"
-	AzureClientSecretMC       = "AZURE_CLIENT_SECRET"
+	AzureClientSecretMC       = "AZURE_CLIENT_SECRET" //nolint:gosec
 	AzureTenantIDMC           = "AZURE_TENANT_ID"
 	AzureSubscribtionIDMC     = "AZURE_SUBSCRIPTION_ID"
 	DigitalOceanTokenKeyMC    = "DO_TOKEN"
@@ -136,8 +137,16 @@ func ProviderCredentials(p kubeone.CloudProviderName, credentialsFilePath string
 			return nil, errors.WithStack(err)
 		}
 
+		vcenterPrefix := vscreds[VSphereAddressMC]
+
 		// force scheme, as machine-controller requires it while terraform does not
 		vscreds[VSphereAddressMC] = "https://" + vscreds[VSphereAddressMC]
+
+		// Save credentials in Secret and configure vSphere cloud controller
+		// manager to read it, in replace of storing those in /etc/kubernates/cloud-config
+		// see more: https://vmware.github.io/vsphere-storage-for-kubernetes/documentation/k8s-secret.html
+		vscreds[fmt.Sprintf("%s.username", vcenterPrefix)] = vscreds[VSphereUsernameMC]
+		vscreds[fmt.Sprintf("%s.password", vcenterPrefix)] = vscreds[VSpherePassword]
 		return vscreds, nil
 	case kubeone.CloudProviderNameNone:
 		return map[string]string{}, nil
@@ -187,29 +196,42 @@ func (f *fetcher) parseAWSCredentials() (map[string]string, error) {
 
 	creds := make(map[string]string)
 	envCredsProvider := credentials.NewEnvCredentials()
+
+	// will error out in case when ether ID or KEY are missing from ENV
 	envCreds, err := envCredsProvider.Get()
-	if err != nil {
-		return nil, err
-	}
-	if envCreds.AccessKeyID != "" && envCreds.SecretAccessKey != "" {
+
+	switch err {
+	case nil:
 		creds[AWSAccessKeyID] = envCreds.AccessKeyID
 		creds[AWSSecretAccessKey] = envCreds.SecretAccessKey
 		return creds, nil
+	case credentials.ErrSecretAccessKeyNotFound, credentials.ErrAccessKeyIDNotFound:
+		// ignore above errors to continue to shared credentials method
+	default:
+		return nil, errors.WithStack(err)
+	}
+
+	if os.Getenv("AWS_PROFILE") == "" {
+		// no profile is specified, we refuse to totally implicitly use shared
+		// credentials. This is needed as a precaution, to avoid accidental
+		// exposure of credentials not meant for sharing with cluster.
+		return nil, errors.New("no ENV credentials found, AWS_PROFILE is empty")
 	}
 
 	// If env fails resort to config file
 	configCredsProvider := credentials.NewSharedCredentials("", "")
+
+	// will error out in case when ether ID or KEY are missing from shared file
 	configCreds, err := configCredsProvider.Get()
 	if err != nil {
-		return nil, err
-	}
-	if configCreds.AccessKeyID != "" && configCreds.SecretAccessKey != "" {
-		creds[AWSAccessKeyID] = configCreds.AccessKeyID
-		creds[AWSSecretAccessKey] = configCreds.SecretAccessKey
-		return creds, nil
+		return nil, errors.WithStack(err)
 	}
 
-	return nil, errors.New("error parsing aws credentials")
+	// safe to assume credentials were found
+	creds[AWSAccessKeyID] = configCreds.AccessKeyID
+	creds[AWSSecretAccessKey] = configCreds.SecretAccessKey
+
+	return creds, nil
 }
 
 func (f fetcher) parseCredentialVariables(envVars []ProviderEnvironmentVariable, validationFunc func(map[string]string) error) (map[string]string, error) {

@@ -17,8 +17,11 @@ limitations under the License.
 package ssh
 
 import (
+	"context"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 
 	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
 )
@@ -26,54 +29,76 @@ import (
 // Connector holds a map of Connections
 type Connector struct {
 	lock        sync.Mutex
-	connections map[string]Connection
+	connections map[int]Connection
+	ctx         context.Context
 }
 
 // NewConnector constructor
-func NewConnector() *Connector {
+func NewConnector(ctx context.Context) *Connector {
 	return &Connector{
-		connections: make(map[string]Connection),
+		connections: make(map[int]Connection),
+		ctx:         ctx,
 	}
 }
 
+// Tunnel returns established SSH tunnel
+func (c *Connector) Tunnel(host kubeoneapi.HostConfig) (Tunneler, error) {
+	conn, err := c.Connect(host)
+	if err != nil {
+		return nil, err
+	}
+
+	tunn, ok := conn.(Tunneler)
+	if !ok {
+		err = errors.New("unable to assert Tunneler")
+	}
+
+	return tunn, err
+}
+
 // Connect to the node
-func (c *Connector) Connect(node kubeoneapi.HostConfig) (Connection, error) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Connector) Connect(host kubeoneapi.HostConfig) (Connection, error) {
 	var err error
 
-	conn, found := c.connections[node.PublicAddress]
-	if !found {
-		opts := Opts{
-			Username:    node.SSHUsername,
-			Port:        node.SSHPort,
-			Hostname:    node.PublicAddress,
-			KeyFile:     node.SSHPrivateKeyFile,
-			AgentSocket: node.SSHAgentSocket,
-			Timeout:     10 * time.Second,
-			Bastion:     node.Bastion,
-			BastionPort: node.BastionPort,
-			BastionUser: node.BastionUser,
-		}
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
-		conn, err = NewConnection(opts)
+	conn, found := c.connections[host.ID]
+	if !found {
+		opts := sshOpts(host)
+		opts.Context = c.ctx
+		conn, err = NewConnection(c, opts)
 		if err != nil {
 			return nil, err
 		}
 
-		c.connections[node.PublicAddress] = conn
+		c.connections[host.ID] = conn
 	}
 
 	return conn, nil
 }
 
-// CloseAll closes all connections
-func (c *Connector) CloseAll() {
+func (c *Connector) forgetConnection(conn *connection) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	for _, conn := range c.connections {
-		conn.Close()
+	for k := range c.connections {
+		if c.connections[k] == conn {
+			delete(c.connections, k)
+		}
 	}
-	c.connections = make(map[string]Connection)
+}
+
+func sshOpts(host kubeoneapi.HostConfig) Opts {
+	return Opts{
+		Username:    host.SSHUsername,
+		Port:        host.SSHPort,
+		Hostname:    host.PublicAddress,
+		KeyFile:     host.SSHPrivateKeyFile,
+		AgentSocket: host.SSHAgentSocket,
+		Timeout:     10 * time.Second,
+		Bastion:     host.Bastion,
+		BastionPort: host.BastionPort,
+		BastionUser: host.BastionUser,
+	}
 }

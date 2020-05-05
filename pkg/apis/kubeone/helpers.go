@@ -18,6 +18,7 @@ package kubeone
 
 import (
 	"errors"
+	"math/rand"
 
 	"github.com/Masterminds/semver"
 )
@@ -33,10 +34,21 @@ func (c KubeOneCluster) Leader() (HostConfig, error) {
 	return HostConfig{}, errors.New("leader not found")
 }
 
+func (c KubeOneCluster) RandomHost() HostConfig {
+	n := rand.Int31n(int32(len(c.Hosts)))
+	return c.Hosts[n]
+}
+
 // Followers returns all but the first configured host. Only call
 // this after validating the cluster config to ensure hosts exist.
 func (c KubeOneCluster) Followers() []HostConfig {
-	return c.Hosts[1:]
+	followers := []HostConfig{}
+	for _, h := range c.Hosts {
+		if !h.IsLeader {
+			followers = append(followers, h)
+		}
+	}
+	return followers
 }
 
 // SetHostname sets the hostname for the given host
@@ -56,15 +68,15 @@ func (h *HostConfig) SetLeader(leader bool) {
 
 // CloudProviderInTree detects is there in-tree cloud provider implementation for specified provider.
 // List of in-tree provider can be found here: https://github.com/kubernetes/kubernetes/tree/master/pkg/cloudprovider
-func (p CloudProviderSpec) CloudProviderInTree() bool {
+func (p CloudProviderSpec) CloudProviderInTree() bool { //nolint:stylecheck
 	switch p.Name {
-	case CloudProviderNameAWS, CloudProviderNameGCE, CloudProviderNameOpenStack:
+	case CloudProviderNameOpenStack:
+		return !p.External
+	case CloudProviderNameAWS, CloudProviderNameGCE, CloudProviderNameVSphere, CloudProviderNameAzure:
 		return true
-	case CloudProviderNameVSphere, CloudProviderNameAzure:
-		return true
-	default:
-		return false
 	}
+
+	return false
 }
 
 // KubernetesCNIVersion returns kubernetes-cni package version

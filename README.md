@@ -38,7 +38,7 @@ upgrade to the v0.6.0 or newer as soon as possible.
 * Supports Kubernetes 1.13+ High-Available (HA) clusters
 * Uses `kubeadm` to provision clusters
 * Comes with a straightforward and easy to use CLI
-* Choice of Linux distributions between Ubuntu, CentOS and CoreOS
+* Choice of Linux distributions between Ubuntu, CentOS and CoreOS/Flatcar
 * Integrates with [Cluster-API][7] and [Kubermatic machine-controller][8] to
   manage worker nodes
 * Integrates with Terraform for sourcing data about infrastructure and control
@@ -50,35 +50,43 @@ upgrade to the v0.6.0 or newer as soon as possible.
 
 ### Downloading a binary from GitHub Releases
 
-The recommended way to obtain KubeOne is to grab the
-binary from the [GitHub Releases][9] page. On the
-releases page, find the binary for your operating system
-and architecture and download it or grab the URL and use
-`wget` or `curl` to download the binary.
-
+The fastest way to get KubeOne:
 ```bash
-curl -LO https://github.com/kubermatic/kubeone/releases/download/v<version>/kubeone_<version>_linux_amd64.zip
+curl -sfL get.kubeone.io | sh
 ```
 
-Extract the binary. On Linux and macOS, you can use `unzip`.
+If you want to have more control over how KubeOne is installed, download the
+binary from the [GitHub Releases][9] page. 
+
+On the releases page, you can find the binary for your operating system
+and architecture 
+
+Download it or grab the URL and use `wget` or `curl` to download the binary.
+
+Extract the binary to the KubeOne directory. On Linux and macOS, you can use `unzip`.
+
+Move the `kubeone` binary to your path, so you can easily invoke it from your terminal.
 
 ```bash
-unzip kubeone_0.8.0_linux_amd64.zip
-```
-
-Move the `kubeone` binary to your path, so you can easily
-invoke it from your terminal.
-
-```bash
-sudo mv kubeone /usr/local/bin
+OS=$(uname)
+VERSION=$(curl -w '%{url_effective}' -I -L -s -S https://github.com/kubermatic/kubeone/releases/latest -o /dev/null | sed -e 's|.*/v||')
+curl -LO "https://github.com/kubermatic/kubeone/releases/download/v${VERSION}/kubeone_${VERSION}_${OS}_amd64.zip"
+unzip kubeone_${VERSION}_${OS}_amd64.zip -d kubeone_${VERSION}_${OS}_amd64
+sudo mv kubeone_${VERSION}_${OS}_amd64/kubeone /usr/local/bin
 ```
 
 ### Building KubeOne
 
 The alternative way to install KubeOne is using `go get`.
 
+To get latest stable release:
 ```bash
-go get -u github.com/kubermatic/kubeone
+GO111MODULE=on go get github.com/kubermatic/kubeone
+```
+
+To get latest beta release (for example v0.11.0-beta.0 tag):
+```bash
+GO111MODULE=on go get github.com/kubermatic/kubeone@v0.11.0-beta.0
 ```
 
 While running of the master branch is a great way to peak at and test
@@ -151,10 +159,10 @@ In the following table you can find what are supported Kubernetes and Terraform
 versions for each KubeOne version. KubeOne versions that are crossed out are not
 supported. It's highly recommended to use the latest version whenever possible.
 
-| KubeOne version | 1.16 | 1.15 | 1.14 | 1.13 | Terraform | Supported providers                                                |
-|-----------------|------|------|------|------|-----------|--------------------------------------------------------------------|
-| v0.10.0+        | +    | +    | +    | -    | v0.12+    | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack, vSphere, Azure |
-| v0.9.0+         | -    | +    | +    | +    | v0.12+    | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack, vSphere, Azure |
+| KubeOne version | 1.17 | 1.16 | 1.15 | 1.14 | 1.13 | Terraform | Supported providers                                                |
+|-----------------|------|------|------|------|------|-----------|--------------------------------------------------------------------|
+| v0.11.0+        | +    | +    | +    | -    | -    | v0.12+    | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack, vSphere, Azure |
+| v0.10.0+        | -    | +    | +    | +    | -    | v0.12+    | AWS, DigitalOcean, GCE, Hetzner, Packet, OpenStack, vSphere, Azure |
 
 ## Getting Started
 

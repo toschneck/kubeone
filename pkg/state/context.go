@@ -17,6 +17,8 @@ limitations under the License.
 package state
 
 import (
+	"context"
+
 	"github.com/sirupsen/logrus"
 
 	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
@@ -29,10 +31,14 @@ import (
 	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func New() (*State, error) {
+func New(ctx context.Context) (*State, error) {
 	joinToken, err := bootstraputil.GenerateBootstrapToken()
 	return &State{
-		JoinToken: joinToken,
+		JoinToken:     joinToken,
+		Connector:     ssh.NewConnector(ctx),
+		Configuration: configupload.NewConfiguration(),
+		Context:       ctx,
+		WorkDir:       "./kubeone",
 	}, err
 }
 
@@ -44,6 +50,7 @@ type State struct {
 	Connector                 *ssh.Connector
 	Configuration             *configupload.Configuration
 	Runner                    *runner.Runner
+	Context                   context.Context
 	WorkDir                   string
 	JoinCommand               string
 	JoinToken                 string
@@ -57,6 +64,7 @@ type State struct {
 	UpgradeMachineDeployments bool
 	PatchCNI                  bool
 	CredentialsFilePath       string
+	ManifestFilePath          string
 }
 
 func (s *State) KubeadmVerboseFlag() string {

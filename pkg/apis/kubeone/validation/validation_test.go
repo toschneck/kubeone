@@ -344,6 +344,10 @@ func TestValidateWorkerConfig(t *testing.T) {
 					Name:     "test-2",
 					Replicas: intPtr(5),
 				},
+				{
+					Name:     "test-3",
+					Replicas: intPtr(0),
+				},
 			},
 			expectedError: false,
 		},
@@ -351,20 +355,6 @@ func TestValidateWorkerConfig(t *testing.T) {
 			name:          "valid worker config (no worker defined)",
 			workerConfig:  []kubeone.WorkerConfig{},
 			expectedError: false,
-		},
-		{
-			name: "invalid worker config (zero replicas)",
-			workerConfig: []kubeone.WorkerConfig{
-				{
-					Name:     "test-1",
-					Replicas: intPtr(0),
-				},
-				{
-					Name:     "test-2",
-					Replicas: intPtr(5),
-				},
-			},
-			expectedError: true,
 		},
 		{
 			name: "invalid worker config (replicas not provided)",
@@ -553,6 +543,57 @@ func TestValidateOIDCConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			errs := ValidateOIDCConfig(tc.oidcConfig, nil)
 			if (len(errs) == 0) == tc.expectedError {
+				t.Errorf("test case failed: expected %v, but got %v", tc.expectedError, (len(errs) != 0))
+			}
+		})
+	}
+}
+
+func TestValidateAddons(t *testing.T) {
+	tests := []struct {
+		name          string
+		addons        *kubeone.Addons
+		expectedError bool
+	}{
+		{
+			name: "valid addons config (enabled)",
+			addons: &kubeone.Addons{
+				Enable: true,
+				Path:   "./addons",
+			},
+			expectedError: false,
+		},
+		{
+			name: "valid addons config (disabled)",
+			addons: &kubeone.Addons{
+				Enable: false,
+			},
+			expectedError: false,
+		},
+		{
+			name:          "valid addons config (empty)",
+			addons:        &kubeone.Addons{},
+			expectedError: false,
+		},
+		{
+			name:          "valid addons config (nil)",
+			addons:        nil,
+			expectedError: false,
+		},
+		{
+			name: "invalid addons config (enabled without path)",
+			addons: &kubeone.Addons{
+				Enable: true,
+			},
+			expectedError: true,
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			errs := ValidateAddons(tc.addons, nil)
+			if (len(errs) == 0) == tc.expectedError {
+				t.Log(errs[0])
 				t.Errorf("test case failed: expected %v, but got %v", tc.expectedError, (len(errs) != 0))
 			}
 		})

@@ -67,6 +67,18 @@ output "kubeone_workers" {
           subnetName        = azurerm_subnet.subnet.name
           vmSize            = var.worker_vm_size
           vnetName          = azurerm_virtual_network.vpc.name
+          # Custom Image ID (optional)
+          # imageID = ""
+          # Size of the operating system disk (optional)
+          # osDiskSize = 100
+          # Size of the data disk (optional)
+          # dataDiskSize = 100
+          # Zones (optional)
+          # Represents Availability Zones is a high-availability offering
+          # that protects your applications and data from datacenter failures.
+          # zones = {
+          #   "1"
+          # }
           tags = {
             "${var.cluster_name}-workers" = "pool1"
           }

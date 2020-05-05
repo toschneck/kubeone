@@ -25,6 +25,7 @@ variable "worker_os" {
   # * ubuntu
   # * centos
   # * coreos
+  # * flatcar
   default = "ubuntu"
 }
 
@@ -51,6 +52,16 @@ variable "ssh_private_key_file" {
 variable "ssh_agent_socket" {
   description = "SSH Agent socket, default to grab from $SSH_AUTH_SOCK"
   default     = "env:SSH_AUTH_SOCK"
+}
+
+variable "bastion_port" {
+  description = "Bastion SSH port"
+  default     = 22
+}
+
+variable "bastion_user" {
+  description = "Bastion SSH username"
+  default     = "ubuntu"
 }
 
 # Provider specific settings
@@ -85,3 +96,22 @@ variable "ami" {
   description = "AMI ID, use it to fixate control-plane AMI in order to avoid force-recreation it at later times"
 }
 
+variable "subnets_cidr" {
+  default     = 24
+  description = "CIDR mask bits per subnet"
+}
+
+variable "internal_api_lb" {
+  default     = false
+  description = "make kubernetes API loadbalancer internal (reachible only from inside the VPC)"
+}
+
+variable "open_nodeports" {
+  default     = false
+  description = "open NodePorts flag"
+}
+
+variable "initial_machinedeployment_replicas" {
+  default     = 1
+  description = "number of replicas per MachineDeployment"
+}

@@ -18,8 +18,8 @@ package externalccm
 
 import (
 	"context"
+	"encoding/json"
 
-	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 
 	"github.com/kubermatic/kubeone/pkg/clientutil"
@@ -32,13 +32,18 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+type packetCloudSA struct {
+	APIKey    string `json:"apiKey"`
+	ProjectID string `json:"projectID"`
+}
+
 const (
-	packetCCMVersion     = "v0.0.4"
-	packetSAName         = "cloud-controller-manager"
-	packetDeploymentName = "packet-cloud-controller-manager"
+	packetImage             = "packethost/packet-ccm:v1.0.0"
+	packetSAName            = "cloud-controller-manager"
+	packetDeploymentName    = "packet-cloud-controller-manager"
+	packetCloudSASecretName = "packet-cloud-config"
 )
 
 func ensurePacket(s *state.State) error {
@@ -47,10 +52,23 @@ func ensurePacket(s *state.State) error {
 	}
 
 	ctx := context.Background()
+	sa := packetServiceAccount()
+	crole := packetClusterRole()
+
+	creds, err := credentials.ProviderCredentials(s.Cluster.CloudProvider.Name, s.CredentialsFilePath)
+	if err != nil {
+		return errors.Wrap(err, "failed to fetch credentials")
+	}
+	secret, err := packetCloudSASecret(creds)
+	if err != nil {
+		return errors.Wrap(err, "failed to generate packet cloud config secret")
+	}
+
 	k8sobjects := []runtime.Object{
-		packetServiceAccount(),
-		packetClusterRole(),
-		packetClusterRoleBinding(),
+		sa,
+		crole,
+		genClusterRoleBinding("system:cloud-controller-manager", crole, sa),
+		secret,
 	}
 
 	for _, obj := range k8sobjects {
@@ -59,21 +77,7 @@ func ensurePacket(s *state.State) error {
 		}
 	}
 
-	dep := packetDeployment()
-	want, err := semver.NewConstraint("<= " + packetCCMVersion)
-	if err != nil {
-		return errors.Wrap(err, "failed to parse packet CCM version constraint")
-	}
-
-	_, err = controllerutil.CreateOrUpdate(ctx,
-		s.DynamicClient,
-		dep,
-		mutateDeploymentWithVersionCheck(want))
-	if err != nil {
-		s.Logger.Warnf("unable to ensure packet CCM Deployment: %v, skipping", err)
-	}
-
-	return nil
+	return clientutil.CreateOrUpdate(ctx, s.DynamicClient, packetDeployment())
 }
 
 func packetServiceAccount() *corev1.ServiceAccount {
@@ -83,6 +87,27 @@ func packetServiceAccount() *corev1.ServiceAccount {
 			Namespace: metav1.NamespaceSystem,
 		},
 	}
+}
+
+func packetCloudSASecret(creds map[string]string) (*corev1.Secret, error) {
+	cloudSA := &packetCloudSA{
+		APIKey:    creds[credentials.PacketAPIKeyMC],
+		ProjectID: creds[credentials.PacketProjectID],
+	}
+	b, err := json.Marshal(cloudSA)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal cloud-sa to json")
+	}
+
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      packetCloudSASecretName,
+			Namespace: metav1.NamespaceSystem,
+		},
+		Data: map[string][]byte{
+			"cloud-sa.json": b,
+		},
+	}, nil
 }
 
 func packetClusterRole() *rbacv1.ClusterRole {
@@ -138,26 +163,6 @@ func packetClusterRole() *rbacv1.ClusterRole {
 	}
 }
 
-func packetClusterRoleBinding() *rbacv1.ClusterRoleBinding {
-	return &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "system:cloud-controller-manager",
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Name:     "system:cloud-controller-manager",
-			Kind:     "ClusterRole",
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      packetSAName,
-				Namespace: metav1.NamespaceSystem,
-			},
-		},
-	}
-}
-
 func packetDeployment() *appsv1.Deployment {
 	var (
 		replicas int32 = 1
@@ -208,41 +213,36 @@ func packetDeployment() *appsv1.Deployment {
 					Containers: []corev1.Container{
 						{
 							Name:  "packet-cloud-controller-manager",
-							Image: "packethost/packet-ccm:" + packetCCMVersion,
+							Image: packetImage,
 							Command: []string{
 								"./packet-cloud-controller-manager",
 								"--cloud-provider=packet",
 								"--leader-elect=false",
 								"--allow-untagged-cloud=true",
+								"--authentication-skip-lookup=true",
+								"--provider-config=/etc/cloud-sa/cloud-sa.json",
 							},
-							Env: []corev1.EnvVar{
+							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name: "PACKET_AUTH_TOKEN",
-									ValueFrom: &corev1.EnvVarSource{
-										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: credentials.SecretName,
-											},
-											Key: credentials.PacketAPIKeyMC,
-										},
-									},
-								},
-								{
-									Name: "PACKET_PROJECT_ID",
-									ValueFrom: &corev1.EnvVarSource{
-										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: credentials.SecretName,
-											},
-											Key: credentials.PacketProjectID,
-										},
-									},
+									Name:      "cloud-sa-volume",
+									ReadOnly:  true,
+									MountPath: "/etc/cloud-sa",
 								},
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("100m"),
 									corev1.ResourceMemory: resource.MustParse("50Mi"),
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "cloud-sa-volume",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: packetCloudSASecretName,
 								},
 							},
 						},

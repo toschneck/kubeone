@@ -18,7 +18,6 @@ package machinecontroller
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -35,6 +34,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -46,7 +46,7 @@ const (
 	MachineControllerNamespace     = metav1.NamespaceSystem
 	MachineControllerAppLabelKey   = "app"
 	MachineControllerAppLabelValue = "machine-controller"
-	MachineControllerTag           = "v1.5.8"
+	MachineControllerTag           = "v1.13.1"
 )
 
 // Deploy deploys MachineController deployment with RBAC on the cluster
@@ -97,15 +97,16 @@ func Deploy(s *state.State) error {
 // WaitForMachineController waits for machine-controller-webhook to become running
 // func WaitForMachineController(corev1Client corev1types.CoreV1Interface) error {
 func WaitForMachineController(client dynclient.Client) error {
-	listOpts := dynclient.ListOptions{Namespace: WebhookNamespace}
-	err := listOpts.SetLabelSelector(fmt.Sprintf("%s=%s", MachineControllerAppLabelKey, MachineControllerAppLabelValue))
-	if err != nil {
-		return errors.Wrap(err, "failed to parse machine-controller labels")
+	listOpts := dynclient.ListOptions{
+		Namespace: WebhookNamespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			MachineControllerAppLabelKey: MachineControllerAppLabelValue,
+		}),
 	}
 
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 		machineControllerPods := corev1.PodList{}
-		err = client.List(context.Background(), &listOpts, &machineControllerPods)
+		err := client.List(context.Background(), &machineControllerPods, &listOpts)
 		if err != nil {
 			return false, errors.Wrap(err, "failed to list machine-controller pod")
 		}
@@ -202,6 +203,22 @@ func machineControllerClusterRole() *rbacv1.ClusterRole {
 					"machinesets/status",
 				},
 				Verbs: []string{"*"},
+			},
+			{
+				APIGroups: []string{"certificates.k8s.io"},
+				Resources: []string{"certificatesigningrequests"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+			{
+				APIGroups: []string{"certificates.k8s.io"},
+				Resources: []string{"certificatesigningrequests/approval"},
+				Verbs:     []string{"update"},
+			},
+			{
+				APIGroups:     []string{"certificates.k8s.io"},
+				Resources:     []string{"signers"},
+				ResourceNames: []string{"kubernetes.io/kubelet-serving"},
+				Verbs:         []string{"approve"},
 			},
 		},
 	}
@@ -734,6 +751,7 @@ func machineControllerDeployment(cluster *kubeoneapi.KubeOneCluster, credentials
 		"-v", "4",
 		"-internal-listen-address", "0.0.0.0:8085",
 		"-cluster-dns", nodelocaldns.VirtualIP,
+		"-node-csr-approver",
 	}
 
 	if cluster.Proxy.HTTP != "" {
@@ -803,6 +821,9 @@ func machineControllerDeployment(cluster *kubeoneapi.KubeOneCluster, credentials
 					},
 				},
 				Spec: corev1.PodSpec{
+					NodeSelector: map[string]string{
+						"node-role.kubernetes.io/master": "",
+					},
 					ServiceAccountName: "machine-controller",
 					Tolerations: []corev1.Toleration{
 						{

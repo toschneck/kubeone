@@ -27,16 +27,18 @@ import (
 	"github.com/kubermatic/kubeone/pkg/clientutil"
 	"github.com/kubermatic/kubeone/pkg/state"
 
+	clustercommon "github.com/kubermatic/machine-controller/pkg/apis/cluster/common"
+	clusterv1alpha1 "github.com/kubermatic/machine-controller/pkg/apis/cluster/v1alpha1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
-	clusterv1alpha1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
-// DeployMachineDeployments deploys MachineDeployments that create appropriate machines
-func DeployMachineDeployments(s *state.State) error {
+// CreateMachineDeployments creates MachineDeployments that create appropriate
+// worker machines
+func CreateMachineDeployments(s *state.State) error {
 	if s.DynamicClient == nil {
 		return errors.New("kubernetes dynamic client in not initialized")
 	}

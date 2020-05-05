@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strings"
+
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -29,6 +31,8 @@ const (
 	DefaultServiceDNS = "cluster.local"
 	// DefaultNodePortRange defines the default NodePort range
 	DefaultNodePortRange = "30000-32767"
+	// DefaultStaticNoProxy defined static NoProxy
+	DefaultStaticNoProxy = "127.0.0.1/8,localhost"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
@@ -39,6 +43,7 @@ func SetDefaults_KubeOneCluster(obj *KubeOneCluster) {
 	SetDefaults_Hosts(obj)
 	SetDefaults_APIEndpoints(obj)
 	SetDefaults_ClusterNetwork(obj)
+	SetDefaults_Proxy(obj)
 	SetDefaults_MachineController(obj)
 	SetDefaults_SystemPackages(obj)
 	SetDefaults_Features(obj)
@@ -50,13 +55,28 @@ func SetDefaults_Hosts(obj *KubeOneCluster) {
 		return
 	}
 
-	// Set first host to be the leader
-	obj.Hosts[0].IsLeader = true
+	setDefaultLeader := true
 
 	// Define a unique ID for each host
 	for idx := range obj.Hosts {
+		if setDefaultLeader && obj.Hosts[idx].IsLeader {
+			// override setting default leader, as explicit leader already
+			// defined
+			setDefaultLeader = false
+		}
 		obj.Hosts[idx].ID = idx
 		defaultHostConfig(&obj.Hosts[idx])
+	}
+	if setDefaultLeader {
+		// In absence of explicitly defined leader set the first host to be the
+		// default leader
+		obj.Hosts[0].IsLeader = true
+	}
+
+	for idx := range obj.StaticWorkers {
+		// continue assinging IDs after control plane hosts. This way every node gets a unique ID regardless of the different host slices
+		obj.StaticWorkers[idx].ID = idx + len(obj.Hosts)
+		defaultHostConfig(&obj.StaticWorkers[idx])
 	}
 }
 
@@ -94,6 +114,22 @@ func SetDefaults_ClusterNetwork(obj *KubeOneCluster) {
 	}
 }
 
+func SetDefaults_Proxy(obj *KubeOneCluster) {
+	if obj.Proxy.HTTP == "" && obj.Proxy.HTTPS == "" {
+		return
+	}
+	noproxy := []string{
+		DefaultStaticNoProxy,
+		obj.ClusterNetwork.ServiceDomainName,
+		obj.ClusterNetwork.PodSubnet,
+		obj.ClusterNetwork.ServiceSubnet,
+	}
+	if obj.Proxy.NoProxy != "" {
+		noproxy = append(noproxy, obj.Proxy.NoProxy)
+	}
+	obj.Proxy.NoProxy = strings.Join(noproxy, ",")
+}
+
 func SetDefaults_MachineController(obj *KubeOneCluster) {
 	if obj.MachineController == nil {
 		obj.MachineController = &MachineControllerConfig{
@@ -122,6 +158,14 @@ func SetDefaults_Features(obj *KubeOneCluster) {
 	}
 	if obj.Features.StaticAuditLog != nil && obj.Features.StaticAuditLog.Enable {
 		defaultStaticAuditLogConfig(&obj.Features.StaticAuditLog.Config)
+	}
+}
+
+func SetDefaults_Addons(obj *KubeOneCluster) {
+	if obj.Addons != nil && obj.Addons.Enable {
+		if len(obj.Addons.Path) == 0 {
+			obj.Addons.Path = "./addons"
+		}
 	}
 }
 

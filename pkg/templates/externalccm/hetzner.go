@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 
 	"github.com/kubermatic/kubeone/pkg/clientutil"
@@ -33,11 +32,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
-	hetznerCCMVersion     = "v1.4.0"
+	hetznerImage          = "hetznercloud/hcloud-cloud-controller-manager:v1.5.1"
 	hetznerSAName         = "cloud-controller-manager"
 	hetznerDeploymentName = "hcloud-cloud-controller-manager"
 )
@@ -60,20 +58,7 @@ func ensureHetzner(s *state.State) error {
 	}
 
 	dep := hetznerDeployment(s.Cluster.ClusterNetwork.NetworkID, s.Cluster.ClusterNetwork.PodSubnet)
-	want, err := semver.NewConstraint("<= " + hetznerCCMVersion)
-	if err != nil {
-		return errors.Wrap(err, "failed to parse hetzner CCM version constraint")
-	}
-
-	_, err = controllerutil.CreateOrUpdate(ctx,
-		s.DynamicClient,
-		dep,
-		mutateDeploymentWithVersionCheck(want))
-	if err != nil {
-		s.Logger.Warnf("unable to ensure hetzner CCM Deployment: %v, skipping", err)
-	}
-
-	return nil
+	return clientutil.CreateOrUpdate(ctx, s.DynamicClient, dep)
 }
 
 func hetznerServiceAccount() *corev1.ServiceAccount {
@@ -107,10 +92,9 @@ func hetznerClusterRoleBinding() *rbacv1.ClusterRoleBinding {
 
 func hetznerDeployment(networkID, podSubnet string) *appsv1.Deployment {
 	var (
-		replicas    int32 = 1
-		revisions   int32 = 2
-		hostNetwork       = false
-		cmd               = []string{
+		replicas  int32 = 1
+		revisions int32 = 2
+		cmd             = []string{
 			"/bin/hcloud-cloud-controller-manager",
 			"--cloud-provider=hcloud",
 			"--leader-elect=false",
@@ -120,7 +104,6 @@ func hetznerDeployment(networkID, podSubnet string) *appsv1.Deployment {
 	if len(networkID) > 0 {
 		cmd = append(cmd, "--allocate-node-cidrs=true")
 		cmd = append(cmd, fmt.Sprintf("--cluster-cidr=%s", podSubnet))
-		hostNetwork = true
 	}
 
 	return &appsv1.Deployment{
@@ -166,11 +149,10 @@ func hetznerDeployment(networkID, podSubnet string) *appsv1.Deployment {
 							Operator: corev1.TolerationOpExists,
 						},
 					},
-					HostNetwork: hostNetwork,
 					Containers: []corev1.Container{
 						{
 							Name:    "hcloud-cloud-controller-manager",
-							Image:   "hetznercloud/hcloud-cloud-controller-manager:" + hetznerCCMVersion,
+							Image:   hetznerImage,
 							Command: cmd,
 							Env: []corev1.EnvVar{
 								{

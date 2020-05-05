@@ -1,5 +1,208 @@
 # Changelog
 
+# [v1.0.0-alpha.0](https://github.com/kubermatic/kubeone/releases/tag/v1.0.0-alpha.0) - 2020-04-22
+
+## Added
+
+* Add support for OpenStack external cloud controller manager (CCM) ([#820](https://github.com/kubermatic/kubeone/pull/820))
+* Add `Untaint` API field to remove default taints from the control plane nodes ([#823](https://github.com/kubermatic/kubeone/pull/823))
+* Add the `PodPresets` feature ([#837](https://github.com/kubermatic/kubeone/pull/837))
+* Add ability to provision static worker nodes ([#834](https://github.com/kubermatic/kubeone/pull/834))
+* Add ability to use an external CNI plugin ([#862](https://github.com/kubermatic/kubeone/pull/862))
+* Add ability to skip cluster provisioning when running the `install` command using the `--no-init` flag ([#871](https://github.com/kubermatic/kubeone/pull/871))
+
+## Changed
+
+### General
+
+* machine-controller and machine-controller-webhook are bound to the control plane nodes ([#832](https://github.com/kubermatic/kubeone/pull/832))
+
+### Bug Fixes
+
+* Apply only addons with `.yaml`, `.yml` and `.json` extensions ([#873](https://github.com/kubermatic/kubeone/pull/873))
+
+### Updated
+
+* Update machine-controller to v1.11.2 ([#861](https://github.com/kubermatic/kubeone/pull/861))
+* Update NodeLocalDNSCache to v1.15.12 ([#872](https://github.com/kubermatic/kubeone/pull/872))
+
+# [v0.11.1](https://github.com/kubermatic/kubeone/releases/tag/v0.11.1) - 2020-04-08
+
+## Added
+
+* Add support for Kubernetes 1.18 ([#841](https://github.com/kubermatic/kubeone/pull/841))
+
+## Changed
+
+### Bug Fixes
+
+* Ensure machine-controller CRDs are Established before deploying MachineDeployments ([#824](https://github.com/kubermatic/kubeone/pull/824))
+* Fix `leader_ip` parsing from Terraform ([#819](https://github.com/kubermatic/kubeone/pull/819))
+
+### Updated
+
+* Update machine-controller to v1.11.1 ([#808](https://github.com/kubermatic/kubeone/pull/808))
+  * NodeCSRApprover controller is enabled by default to automatically approve CSRs for kubelet serving certificates
+  * machine-controller types are updated to include recently added fields
+  * Terraform example scripts are updated with the new fields
+
+# [v0.11.0](https://github.com/kubermatic/kubeone/releases/tag/v0.11.0) - 2020-03-05
+
+**Changelog since v0.10.0. For changelog since v0.11.0-beta.3, please check the [release notes](https://github.com/kubermatic/kubeone/releases/tag/v0.11.0)**
+
+## Attention Needed
+
+* Kubernetes 1.14 clusters are not supported as of this release because 1.14 isn't supported by the upstream anymore
+  * It remains possible and is advisable to upgrade 1.14 clusters to 1.15
+  * Currently, it also remains possible to provision 1.14 clusters, but that can be dropped at any time and it'll not be fixed if it stops working
+* As of this release, it is not possible to upgrade 1.13 clusters to 1.14
+  * Please use an older version of KubeOne in the case you need to upgrade 1.13 clusters
+* The AWS Terraform configuration has been refactored a in backward-incompatible way ([#729](https://github.com/kubermatic/kubeone/issues/729))
+  * Terraform now handles setting up subnets
+  * All resources are tagged ensuring all cluster features offered by AWS CCM are supported
+  * The security of the setup has been increased
+  * Access to nodes and the Kubernetes API is now going over a bastion host
+  * The `aws-private` configuration has been removed
+  * Check out the [new Terraform configuration](https://github.com/kubermatic/kubeone/tree/v0.11.0-beta.0/examples/terraform/aws) for more details
+
+## Added
+
+* Add support for Kubernetes 1.17
+  * Fix cluster upgrade failures when upgrading from 1.16 to 1.17 ([#764](https://github.com/kubermatic/kubeone/pull/764))
+* Add support for ARM64 clusters ([#783](https://github.com/kubermatic/kubeone/pull/783))
+* Add ability to deploy Kubernetes manifests on the provisioning time (KubeOne Addons) ([#782](https://github.com/kubermatic/kubeone/pull/782))
+* Add the `kubeone status` command which checks the health of the cluster, API server and `etcd` ([#734](https://github.com/kubermatic/kubeone/issues/734))
+* Add support for NodeLocalDNSCache ([#704](https://github.com/kubermatic/kubeone/issues/704))
+* Add ability to divert access to the Kubernetes API over SSH tunnel ([#714](https://github.com/kubermatic/kubeone/issues/714))
+* Add support for sourcing proxy settings from Terraform output ([#698](https://github.com/kubermatic/kubeone/issues/698))
+* Persist configured proxy in the system package managers ([#749](https://github.com/kubermatic/kubeone/pull/749))
+
+## Changed
+
+### General
+
+* [Breaking] The AWS Terraform configuration has been refactored ([#729](https://github.com/kubermatic/kubeone/issues/729))
+* The KubeOneCluster manifests is now parsed strictly ([#802](https://github.com/kubermatic/kubeone/pull/802))
+* The leader instance can be defined declarative using API ([#790](https://github.com/kubermatic/kubeone/pull/790))
+* Make vSphere Cloud Controller Manager read credentials from a Secret instead from `cloud-config` ([#724](https://github.com/kubermatic/kubeone/issues/724))
+
+### Bug fixes
+
+* Fix CentOS cluster provisioning ([#770](https://github.com/kubermatic/kubeone/pull/770))
+* Fix AWS shared credentials file handling ([#806](https://github.com/kubermatic/kubeone/pull/806))
+* Fix credentials handling if `.cloudProvider.Name` is `none` ([#696](https://github.com/kubermatic/kubeone/issues/696))
+* Fix upgrades not determining hostname correctly causing upgrades to fail ([#708](https://github.com/kubermatic/kubeone/issues/708))
+* Fix `kubeone reset` failing to reset the cluster ([#727](https://github.com/kubermatic/kubeone/issues/727))
+* Fix `configure-cloud-routes` bug for AWS causing `kube-controller-manager` to log warnings ([#725](https://github.com/kubermatic/kubeone/issues/725))
+* Disable validation of replicas count in the workers definition ([#775](https://github.com/kubermatic/kubeone/pull/775))
+* Proxy settings defined in the config have precedence over those defined in Terraform ([#760](https://github.com/kubermatic/kubeone/pull/760))
+
+### Updates
+
+* Update machine-controller to v1.9.0 ([#774](https://github.com/kubermatic/kubeone/pull/774))
+* Update Canal CNI to v3.10 ([#718](https://github.com/kubermatic/kubeone/issues/718))
+* Update metrics-server to v0.3.6 ([#720](https://github.com/kubermatic/kubeone/issues/720))
+* Update DigitalOcean Cloud Controller Manager to v0.1.21 ([#722](https://github.com/kubermatic/kubeone/issues/722))
+* Update Hetzner Cloud Controller Manager to v1.5.0 ([#726](https://github.com/kubermatic/kubeone/issues/726))
+
+### Removed
+
+* Remove ability to upgrade 1.13 clusters to 1.14 ([#764](https://github.com/kubermatic/kubeone/pull/764))
+* Removed FlexVolume support from the Canal CNI ([#756](https://github.com/kubermatic/kubeone/pull/756))
+
+### Docs
+
+* GCE clusters must be configured as Regional to work properly ([#732](https://github.com/kubermatic/kubeone/issues/732))
+
+
+# [v0.11.0-beta.3](https://github.com/kubermatic/kubeone/releases/tag/v0.11.0-beta.3) - 2019-12-20
+
+## Attention Needed
+
+* Kubernetes 1.14 clusters are not supported as of this release because 1.14 isn't supported by the upstream anymore
+  * It remains possible and is advisable to upgrade 1.14 clusters to 1.15
+  * Currently, it also remains possible to provision 1.14 clusters, but that can be dropped at any time and it'll not be fixed if it stops working
+* As of this release, it is not possible to upgrade 1.13 clusters to 1.14
+  * Please use an older version of KubeOne in the case you need to upgrade 1.13 clusters
+
+## Added
+
+* Add support for Kubernetes 1.17
+  * Fix cluster upgrade failures when upgrading from 1.16 to 1.17 ([#764](https://github.com/kubermatic/kubeone/pull/764))
+
+## Removed
+
+* Remove ability to upgrade 1.13 clusters to 1.14 ([#764](https://github.com/kubermatic/kubeone/pull/764))
+
+# [v0.11.0-beta.2](https://github.com/kubermatic/kubeone/releases/tag/v0.11.0-beta.2) - 2019-12-12
+
+## Changed
+
+### Bug Fixes
+
+* Proxy settings defined in the config have precedence over those defined in Terraform ([#760](https://github.com/kubermatic/kubeone/pull/760))
+
+# [v0.11.0-beta.1](https://github.com/kubermatic/kubeone/releases/tag/v0.11.0-beta.1) - 2019-12-10
+
+## Added
+
+* Persist configured proxy in the system package managers ([#749](https://github.com/kubermatic/kubeone/pull/749))
+
+## Changed
+
+### Bug fixes
+
+* Fix `kubeone status` reporting wrong `etcd` status when the hostname is not provided by Terraform or config ([#753](https://github.com/kubermatic/kubeone/pull/753))
+
+## Removed
+
+* Removed FlexVolume support from the Canal CNI ([#756](https://github.com/kubermatic/kubeone/pull/756))
+
+# [v0.11.0-beta.0](https://github.com/kubermatic/kubeone/releases/tag/v0.11.0-beta.0) - 2019-11-28
+
+## Attention Needed
+
+* The AWS Terraform configuration has been refactored a in backward-incompatible way ([#729](https://github.com/kubermatic/kubeone/issues/729))
+  * Terraform now handles setting up subnets
+  * All resources are tagged ensuring all cluster features offered by AWS CCM are supported
+  * The security of the setup has been increased
+  * Access to nodes and the Kubernetes API is now going over a bastion host
+  * The `aws-private` configuration has been removed
+  * Check out the [new Terraform configuration](https://github.com/kubermatic/kubeone/tree/v0.11.0-beta.0/examples/terraform/aws) for more details
+
+## Added
+
+* Add the `kubeone status` command which checks the health of the cluster, API server and `etcd` ([#734](https://github.com/kubermatic/kubeone/issues/734))
+* Add support for NodeLocalDNSCache ([#704](https://github.com/kubermatic/kubeone/issues/704))
+* Add ability to divert access to the Kubernetes API over SSH tunnel ([#714](https://github.com/kubermatic/kubeone/issues/714))
+* Add support for sourcing proxy settings from Terraform output ([#698](https://github.com/kubermatic/kubeone/issues/698))
+
+## Changed
+
+### General
+
+* [Breaking] The AWS Terraform configuration has been refactored ([#729](https://github.com/kubermatic/kubeone/issues/729))
+* Make vSphere Cloud Controller Manager read credentials from a Secret instead from `cloud-config` ([#724](https://github.com/kubermatic/kubeone/issues/724))
+
+### Bug fixes
+
+* Fix credentials handling if `.cloudProvider.Name` is `none` ([#696](https://github.com/kubermatic/kubeone/issues/696))
+* Fix upgrades not determining hostname correctly causing upgrades to fail ([#708](https://github.com/kubermatic/kubeone/issues/708))
+* Fix `kubeone reset` failing to reset the cluster ([#727](https://github.com/kubermatic/kubeone/issues/727))
+* Fix `configure-cloud-routes` bug for AWS causing `kube-controller-manager` to log warnings ([#725](https://github.com/kubermatic/kubeone/issues/725))
+
+### Updates
+
+* Update machine-controller to v1.8.0 ([#736](https://github.com/kubermatic/kubeone/issues/736))
+* Update Canal CNI to v3.10 ([#718](https://github.com/kubermatic/kubeone/issues/718))
+* Update metrics-server to v0.3.6 ([#720](https://github.com/kubermatic/kubeone/issues/720))
+* Update DigitalOcean Cloud Controller Manager to v0.1.21 ([#722](https://github.com/kubermatic/kubeone/issues/722))
+* Update Hetzner Cloud Controller Manager to v1.5.0 ([#726](https://github.com/kubermatic/kubeone/issues/726))
+
+### Docs
+
+* GCE clusters must be configured as Regional to work properly ([#732](https://github.com/kubermatic/kubeone/issues/732))
+
 # [v0.10.0](https://github.com/kubermatic/kubeone/releases/tag/v0.10.0) - 2019-10-09
 
 ## Attention Needed

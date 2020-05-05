@@ -51,6 +51,7 @@ func ValidateKubeOneCluster(c kubeone.KubeOneCluster) field.ErrorList {
 	allErrs = append(allErrs, ValidateVersionConfig(c.Versions, field.NewPath("versions"))...)
 	allErrs = append(allErrs, ValidateClusterNetworkConfig(c.ClusterNetwork, field.NewPath("clusterNetwork"))...)
 	allErrs = append(allErrs, ValidateFeatures(c.Features, field.NewPath("features"))...)
+	allErrs = append(allErrs, ValidateAddons(c.Addons, field.NewPath("addons"))...)
 
 	return allErrs
 }
@@ -89,7 +90,14 @@ func ValidateCloudProviderSpec(p kubeone.CloudProviderSpec, fldPath *field.Path)
 func ValidateHostConfig(hosts []kubeone.HostConfig, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
+	leaderFound := false
 	for _, h := range hosts {
+		if leaderFound && h.IsLeader {
+			allErrs = append(allErrs, field.Invalid(fldPath, h.IsLeader, "only 1 leader is allowed"))
+		}
+		if h.IsLeader {
+			leaderFound = true
+		}
 		if len(h.PublicAddress) == 0 {
 			allErrs = append(allErrs, field.Invalid(fldPath, h.PublicAddress, "no public IP/address given"))
 		}
@@ -151,8 +159,8 @@ func ValidateWorkerConfig(workerset []kubeone.WorkerConfig, fldPath *field.Path)
 		if w.Name == "" {
 			allErrs = append(allErrs, field.Invalid(fldPath, w.Name, "no name given"))
 		}
-		if w.Replicas == nil || *w.Replicas < 1 {
-			allErrs = append(allErrs, field.Invalid(fldPath, w.Replicas, "replicas must be specified and >= 1"))
+		if w.Replicas == nil || *w.Replicas < 0 {
+			allErrs = append(allErrs, field.Invalid(fldPath, w.Replicas, "replicas must be specified and >= 0"))
 		}
 	}
 
@@ -189,6 +197,7 @@ func ValidateCNI(c *kubeone.CNI, fldPath *field.Path) field.ErrorList {
 	switch c.Provider {
 	case kubeone.CNIProviderCanal:
 	case kubeone.CNIProviderWeaveNet:
+	case kubeone.CNIProviderExternal:
 	default:
 		allErrs = append(allErrs, field.Invalid(fldPath, c.Provider, "unknown CNI provider"))
 	}
@@ -209,7 +218,6 @@ func ValidateFeatures(f kubeone.Features, fldPath *field.Path) field.ErrorList {
 	if f.OpenIDConnect != nil && f.OpenIDConnect.Enable {
 		allErrs = append(allErrs, ValidateOIDCConfig(f.OpenIDConnect.Config, fldPath.Child("openidConnect"))...)
 	}
-	allErrs = append(allErrs)
 	return allErrs
 }
 
@@ -244,6 +252,21 @@ func ValidateOIDCConfig(o kubeone.OpenIDConnectConfig, fldPath *field.Path) fiel
 	}
 	if o.ClientID == "" {
 		allErrs = append(allErrs, field.Invalid(fldPath, o.ClientID, "openidConnect.config.client_id can't be empty"))
+	}
+
+	return allErrs
+}
+
+// ValidateAddons validates the Addons configuration
+func ValidateAddons(o *kubeone.Addons, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if o == nil || !o.Enable {
+		return allErrs
+	}
+
+	if o.Enable && o.Path == "" {
+		allErrs = append(allErrs, field.Invalid(fldPath, o.Path, "addons.path can't be empty"))
 	}
 
 	return allErrs

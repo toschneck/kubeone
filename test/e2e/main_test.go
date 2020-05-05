@@ -21,7 +21,6 @@ package e2e
 import (
 	"context"
 	"flag"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -32,21 +31,23 @@ import (
 	"github.com/kubermatic/kubeone/test/e2e/provisioner"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// testRunIdentifier aka. the build number, a unique identifier for the test run.
 var (
-	testRunIdentifier  string
-	testInitialVersion string
-	testTargetVersion  string
-	testProvider       string
-	testOSControlPlane string
-	testOSWorkers      string
+	testCredentialsFile string
+	testRunIdentifier   string
+	testInitialVersion  string
+	testTargetVersion   string
+	testProvider        string
+	testOSControlPlane  string
+	testOSWorkers       string
 )
 
 func init() {
+	flag.StringVar(&testCredentialsFile, "credentials", "", "path to the credentials file")
 	flag.StringVar(&testRunIdentifier, "identifier", "", "The unique identifier for this test run")
 	flag.StringVar(&testProvider, "provider", "", "Provider to run tests on")
 	flag.StringVar(&testInitialVersion, "initial-version", "", "Cluster version to provision for tests")
@@ -56,7 +57,15 @@ func init() {
 	flag.Parse()
 }
 
-func setupTearDown(p provisioner.Provisioner, k Kubeone) func(t *testing.T) {
+// This is a workaround for a change in the testing framework
+// affecting Go 1.13 and newer.
+// More details: https://github.com/golang/go/issues/31859#issuecomment-489889428
+var _ = func() bool {
+	testing.Init()
+	return true
+}()
+
+func setupTearDown(p provisioner.Provisioner, k *Kubeone) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Log("cleanup ....")
 
@@ -66,20 +75,20 @@ func setupTearDown(p provisioner.Provisioner, k Kubeone) func(t *testing.T) {
 		if errKubeone != nil {
 			t.Errorf("%v", errKubeone)
 		}
+
 		if errProvisioner != nil {
 			t.Errorf("%v", errProvisioner)
 		}
 	}
 }
 
-func waitForNodesReady(client dynclient.Client, expectedNumberOfNodes int) error {
+func waitForNodesReady(t *testing.T, client dynclient.Client, expectedNumberOfNodes int) error {
 	return wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
 		nodes := corev1.NodeList{}
-		nodeListOpts := dynclient.ListOptions{}
 
-		err := client.List(context.Background(), &nodeListOpts, &nodes)
-		if err != nil {
-			return false, errors.Wrap(err, "unable to list nodes")
+		if err := client.List(context.Background(), &nodes); err != nil {
+			t.Logf("error: %v", err)
+			return false, nil
 		}
 
 		if len(nodes.Items) != expectedNumberOfNodes {
@@ -104,18 +113,21 @@ func verifyVersion(client dynclient.Client, namespace string, targetVersion stri
 	}
 
 	nodes := corev1.NodeList{}
-	nodeListOpts := dynclient.ListOptions{}
-	_ = nodeListOpts.SetLabelSelector(fmt.Sprintf("%s=%s", labelControlPlaneNode, ""))
-	err = client.List(context.Background(), &nodeListOpts, &nodes)
-	if err != nil {
+	nodeListOpts := dynclient.ListOptions{
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			labelControlPlaneNode: "",
+		}),
+	}
+
+	if err = client.List(context.Background(), &nodes, &nodeListOpts); err != nil {
 		return errors.Wrap(err, "failed to list nodes")
 	}
 
 	// Kubelet version check
 	for _, n := range nodes.Items {
-		kubeletVer, err := semver.NewVersion(n.Status.NodeInfo.KubeletVersion)
-		if err != nil {
-			return err
+		kubeletVer, errSemver := semver.NewVersion(n.Status.NodeInfo.KubeletVersion)
+		if errSemver != nil {
+			return errSemver
 		}
 		if reqVer.Compare(kubeletVer) != 0 {
 			return errors.Errorf("kubelet version mismatch: expected %v, got %v", reqVer.String(), kubeletVer.String())
@@ -123,10 +135,14 @@ func verifyVersion(client dynclient.Client, namespace string, targetVersion stri
 	}
 
 	apiserverPods := corev1.PodList{}
-	podsListOpts := dynclient.ListOptions{Namespace: namespace}
-	_ = podsListOpts.SetLabelSelector("component=kube-apiserver")
-	err = client.List(context.Background(), &podsListOpts, &apiserverPods)
-	if err != nil {
+	podsListOpts := dynclient.ListOptions{
+		Namespace: namespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			"component": "kube-apiserver",
+		}),
+	}
+
+	if err = client.List(context.Background(), &apiserverPods, &podsListOpts); err != nil {
 		return errors.Wrap(err, "unable to list apiserver pods")
 	}
 

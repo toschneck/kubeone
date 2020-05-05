@@ -17,13 +17,17 @@ limitations under the License.
 package kubeadm
 
 import (
+	"fmt"
+
 	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
 	"github.com/kubermatic/kubeone/pkg/state"
 	"github.com/kubermatic/kubeone/pkg/templates"
 	"github.com/kubermatic/kubeone/pkg/templates/kubeadm/v1beta2"
 )
 
-type kubeadmv1beta2 struct{}
+type kubeadmv1beta2 struct {
+	version string
+}
 
 func (*kubeadmv1beta2) Config(s *state.State, instance kubeoneapi.HostConfig) (string, error) {
 	config, err := v1beta2.NewConfig(s, instance)
@@ -34,10 +38,23 @@ func (*kubeadmv1beta2) Config(s *state.State, instance kubeoneapi.HostConfig) (s
 	return templates.KubernetesToYAML(config)
 }
 
-func (*kubeadmv1beta2) UpgradeLeaderCommand() string {
-	return "kubeadm upgrade apply"
+func (*kubeadmv1beta2) ConfigWorker(s *state.State, instance kubeoneapi.HostConfig) (string, error) {
+	config, err := v1beta2.NewConfigWorker(s, instance)
+	if err != nil {
+		return "", err
+	}
+
+	return templates.KubernetesToYAML(config)
+}
+
+func (k *kubeadmv1beta2) UpgradeLeaderCommand() string {
+	return fmt.Sprintf("kubeadm upgrade apply -y %s", k.version)
 }
 
 func (*kubeadmv1beta2) UpgradeFollowerCommand() string {
-	return "kubeadm upgrade node"
+	return kubeadmUpgradeNodeCommand
+}
+
+func (*kubeadmv1beta2) UpgradeStaticWorkerCommand() string {
+	return kubeadmUpgradeNodeCommand
 }

@@ -18,7 +18,7 @@ package machinecontroller
 
 import (
 	"context"
-	"crypto/rsa"
+	"crypto"
 	"crypto/x509"
 	"fmt"
 	"time"
@@ -35,6 +35,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -96,15 +97,14 @@ func DeployWebhookConfiguration(s *state.State) error {
 func WaitForWebhook(client dynclient.Client) error {
 	listOpts := dynclient.ListOptions{
 		Namespace: WebhookNamespace,
-	}
-	err := listOpts.SetLabelSelector(fmt.Sprintf("%s=%s", WebhookAppLabelKey, WebhookAppLabelValue))
-	if err != nil {
-		return errors.Wrap(err, "failed to parse machine-controller labels")
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			WebhookAppLabelKey: WebhookAppLabelValue,
+		}),
 	}
 
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 		webhookPods := corev1.PodList{}
-		err = client.List(context.Background(), &listOpts, &webhookPods)
+		err := client.List(context.Background(), &webhookPods, &listOpts)
 		if err != nil {
 			return false, errors.Wrap(err, "failed to list machine-controller's webhook pods")
 		}
@@ -162,7 +162,7 @@ func webhookDeployment(cluster *kubeoneapi.KubeOneCluster, credentialsFilePath s
 				},
 			},
 			Strategy: appsv1.DeploymentStrategy{
-				Type: appsv1.RollingUpdateStatefulSetStrategyType,
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDeployment{
 					MaxSurge: &intstr.IntOrString{
 						Type:   intstr.Int,
@@ -181,6 +181,9 @@ func webhookDeployment(cluster *kubeoneapi.KubeOneCluster, credentialsFilePath s
 					},
 				},
 				Spec: corev1.PodSpec{
+					NodeSelector: map[string]string{
+						"node-role.kubernetes.io/master": "",
+					},
 					Volumes: []corev1.Volume{
 						getServingCertVolume(),
 					},
@@ -299,14 +302,14 @@ func getServingCertVolume() corev1.Volume {
 
 // tlsServingCertificate returns a secret with the machine-controller-webhook tls certificate
 // func tlsServingCertificate(ca *triple.KeyPair) (*corev1.Secret, error) {
-func tlsServingCertificate(caKey *rsa.PrivateKey, caCert *x509.Certificate) (*corev1.Secret, error) {
+func tlsServingCertificate(caKey crypto.Signer, caCert *x509.Certificate) (*corev1.Secret, error) {
 	commonName := fmt.Sprintf("%s.%s.svc.cluster.local.", WebhookName, WebhookNamespace)
 	altdnsNames := []string{
 		commonName,
 		fmt.Sprintf("%s.%s.svc", WebhookName, WebhookNamespace),
 	}
 
-	newKPKey, err := certutil.NewPrivateKey()
+	newKPKey, err := certificate.NewPrivateKey()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate private key")
 	}
@@ -319,7 +322,7 @@ func tlsServingCertificate(caKey *rsa.PrivateKey, caCert *x509.Certificate) (*co
 		Usages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
 
-	newKPCert, err := certutil.NewSignedCert(certCfg, newKPKey, caCert, caKey)
+	newKPCert, err := certificate.NewSignedCert(&certCfg, newKPKey, caCert, caKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate certificate")
 	}
@@ -330,9 +333,9 @@ func tlsServingCertificate(caKey *rsa.PrivateKey, caCert *x509.Certificate) (*co
 			Namespace: WebhookNamespace,
 		},
 		Data: map[string][]byte{
-			"cert.pem": certutil.EncodeCertPEM(newKPCert),
-			"key.pem":  certutil.EncodePrivateKeyPEM(newKPKey),
-			"ca.crt":   certutil.EncodeCertPEM(caCert),
+			"cert.pem": certificate.EncodeCertPEM(newKPCert),
+			"key.pem":  certificate.EncodePrivateKeyPEM(newKPKey),
+			"ca.crt":   certificate.EncodeCertPEM(caCert),
 		},
 	}, nil
 }
@@ -344,7 +347,7 @@ func mutatingwebhookConfiguration(caCert *x509.Certificate) *admissionregistrati
 			Name:      "machine-controller.kubermatic.io",
 			Namespace: WebhookNamespace,
 		},
-		Webhooks: []admissionregistrationv1beta1.Webhook{
+		Webhooks: []admissionregistrationv1beta1.MutatingWebhook{
 			{
 				Name:              "machine-controller.kubermatic.io-machinedeployments",
 				NamespaceSelector: &metav1.LabelSelector{},
@@ -368,7 +371,7 @@ func mutatingwebhookConfiguration(caCert *x509.Certificate) *admissionregistrati
 						Namespace: WebhookNamespace,
 						Path:      strPtr("/machinedeployments"),
 					},
-					CABundle: certutil.EncodeCertPEM(caCert),
+					CABundle: certificate.EncodeCertPEM(caCert),
 				},
 			},
 			{
@@ -394,7 +397,7 @@ func mutatingwebhookConfiguration(caCert *x509.Certificate) *admissionregistrati
 						Namespace: WebhookNamespace,
 						Path:      strPtr("/machines"),
 					},
-					CABundle: certutil.EncodeCertPEM(caCert),
+					CABundle: certificate.EncodeCertPEM(caCert),
 				},
 			},
 		},

@@ -19,6 +19,7 @@ package terraform
 import (
 	"encoding/json"
 
+	"github.com/imdario/mergo"
 	"github.com/pkg/errors"
 
 	kubeonev1alpha1 "github.com/kubermatic/kubeone/pkg/apis/kubeone/v1alpha1"
@@ -30,7 +31,9 @@ type controlPlane struct {
 	CloudProvider     *string  `json:"cloud_provider"`
 	PublicAddress     []string `json:"public_address"`
 	PrivateAddress    []string `json:"private_address"`
+	LeaderIP          string   `json:"leader_ip"`
 	Hostnames         []string `json:"hostnames"`
+	Untaint           bool     `json:"untaint"`
 	SSHUser           string   `json:"ssh_user"`
 	SSHPort           int      `json:"ssh_port"`
 	SSHPrivateKeyFile string   `json:"ssh_private_key_file"`
@@ -126,7 +129,9 @@ func (c *Config) Apply(cluster *kubeonev1alpha1.KubeOneCluster) error {
 		cluster.Hosts = hosts
 	}
 
-	cluster.Proxy = c.Proxy.Value
+	if err = mergo.Merge(&cluster.Proxy, &c.Proxy.Value); err != nil {
+		return errors.Wrap(err, "failed to merge proxy settings")
+	}
 
 	if len(cp.NetworkID) > 0 {
 		cluster.ClusterNetwork.NetworkID = cp.NetworkID
@@ -187,6 +192,12 @@ func (c *Config) Apply(cluster *kubeonev1alpha1.KubeOneCluster) error {
 }
 
 func newHostConfig(id int, publicIP, privateIP, hostname string, cp controlPlane) kubeonev1alpha1.HostConfig {
+	var isLeader bool
+
+	if cp.LeaderIP != "" {
+		isLeader = cp.LeaderIP == publicIP || cp.LeaderIP == privateIP
+	}
+
 	return kubeonev1alpha1.HostConfig{
 		ID:                id,
 		PublicAddress:     publicIP,
@@ -199,6 +210,8 @@ func newHostConfig(id int, publicIP, privateIP, hostname string, cp controlPlane
 		Bastion:           cp.Bastion,
 		BastionPort:       cp.BastionPort,
 		BastionUser:       cp.BastionUser,
+		IsLeader:          isLeader,
+		Untaint:           cp.Untaint,
 	}
 }
 
@@ -216,8 +229,10 @@ func (c *Config) updateAWSWorkerset(existingWorkerSet *kubeonev1alpha1.WorkerCon
 		{key: "diskIops", value: awsCloudConfig.DiskIops},
 		{key: "diskSize", value: awsCloudConfig.DiskSize},
 		{key: "diskType", value: awsCloudConfig.DiskType},
+		{key: "ebsVolumeEncrypted", value: awsCloudConfig.EBSVolumeEncrypted},
 		{key: "instanceProfile", value: awsCloudConfig.InstanceProfile},
 		{key: "instanceType", value: awsCloudConfig.InstanceType},
+		{key: "isSpotInstance", value: awsCloudConfig.IsSpotInstance},
 		{key: "region", value: awsCloudConfig.Region},
 		{key: "securityGroupIDs", value: awsCloudConfig.SecurityGroupIDs},
 		{key: "subnetId", value: awsCloudConfig.SubnetID},
@@ -248,10 +263,14 @@ func (c *Config) updateAzureWorkerset(existingWorkerSet *kubeonev1alpha1.WorkerC
 		{key: "resourceGroup", value: azureCloudConfig.ResourceGroup},
 		{key: "routeTableName", value: azureCloudConfig.RouteTableName},
 		{key: "securityGroupName", value: azureCloudConfig.SecurityGroupName},
+		{key: "zones", value: azureCloudConfig.Zones},
 		{key: "subnetName", value: azureCloudConfig.SubnetName},
 		{key: "tags", value: azureCloudConfig.Tags},
 		{key: "vmSize", value: azureCloudConfig.VMSize},
 		{key: "vnetName", value: azureCloudConfig.VNetName},
+		{key: "imageID", value: azureCloudConfig.ImageID},
+		{key: "osDiskSize", value: azureCloudConfig.OSDiskSize},
+		{key: "dataDiskSize", value: azureCloudConfig.DataDiskSize},
 	}
 
 	for _, flag := range flags {
@@ -283,6 +302,7 @@ func (c *Config) updateGCEWorkerset(existingWorkerSet *kubeonev1alpha1.WorkerCon
 		{key: "tags", value: gceCloudConfig.Tags},
 		{key: "multizone", value: gceCloudConfig.MultiZone},
 		{key: "regional", value: gceCloudConfig.Regional},
+		{key: "customImage", value: gceCloudConfig.CustomImage},
 	}
 
 	for _, flag := range flags {
@@ -362,6 +382,7 @@ func (c *Config) updateOpenStackWorkerset(existingWorkerSet *kubeonev1alpha1.Wor
 		{key: "rootDiskSizeGB", value: openstackConfig.RootDiskSizeGB},
 		{key: "nodeVolumeAttachLimit", value: openstackConfig.NodeVolumeAttachLimit},
 		{key: "tags", value: openstackConfig.Tags},
+		{key: "trustDevicePath", value: openstackConfig.TrustDevicePath},
 	}
 
 	for _, flag := range flags {
@@ -384,6 +405,8 @@ func (c *Config) updatePacketWorkerset(existingWorkerSet *kubeonev1alpha1.Worker
 		{key: "projectID", value: packetConfig.ProjectID},
 		{key: "facilities", value: packetConfig.Facilities},
 		{key: "instanceType", value: packetConfig.InstanceType},
+		{key: "billingCycle", value: packetConfig.BillingCycle},
+		{key: "tags", value: packetConfig.Tags},
 	}
 
 	for _, flag := range flags {
@@ -408,8 +431,10 @@ func (c *Config) updateVSphereWorkerset(existingWorkerSet *kubeonev1alpha1.Worke
 		{key: "cpus", value: vsphereConfig.CPUs},
 		{key: "datacenter", value: vsphereConfig.Datacenter},
 		{key: "datastore", value: vsphereConfig.Datastore},
+		{key: "datastoreCluster", value: vsphereConfig.DatastoreCluster},
 		{key: "diskSizeGB", value: vsphereConfig.DiskSizeGB},
 		{key: "folder", value: vsphereConfig.Folder},
+		{key: "resourcePool", value: vsphereConfig.ResourcePool},
 		{key: "memoryMB", value: vsphereConfig.MemoryMB},
 		{key: "templateVMName", value: vsphereConfig.TemplateVMName},
 		{key: "vmNetName", value: vsphereConfig.VMNetName},

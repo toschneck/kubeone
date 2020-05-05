@@ -18,29 +18,25 @@ package kubeconfig
 
 import (
 	"github.com/pkg/errors"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/ssh"
 	"github.com/kubermatic/kubeone/pkg/state"
 
 	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Download downloads Kubeconfig over SSH
-func Download(cluster *kubeoneapi.KubeOneCluster) ([]byte, error) {
-	// connect to leader
-	leader, err := cluster.Leader()
+func Download(s *state.State) ([]byte, error) {
+	// connect to host
+	host, err := s.Cluster.Leader()
 	if err != nil {
 		return nil, err
 	}
-	connector := ssh.NewConnector()
 
-	conn, err := connector.Connect(leader)
+	conn, err := s.Connector.Connect(host)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
 
 	// get the kubeconfig
 	konfig, _, _, err := conn.Exec("sudo cat /etc/kubernetes/admin.conf")
@@ -55,7 +51,7 @@ func Download(cluster *kubeoneapi.KubeOneCluster) ([]byte, error) {
 func BuildKubernetesClientset(s *state.State) error {
 	s.Logger.Infoln("Building Kubernetes clientset…")
 
-	kubeconfig, err := Download(s.Cluster)
+	kubeconfig, err := Download(s)
 	if err != nil {
 		return errors.Wrap(err, "unable to download kubeconfig")
 	}
@@ -65,18 +61,24 @@ func BuildKubernetesClientset(s *state.State) error {
 		return errors.Wrap(err, "unable to build config from kubeconfig bytes")
 	}
 
-	err = HackIssue321InitDynamicClient(s)
-	return errors.Wrap(err, "unable to build dynamic client")
+	tunn, err := s.Connector.Tunnel(s.Cluster.RandomHost())
+	if err != nil {
+		return errors.Wrap(err, "failed to get SSH tunnel")
+	}
+
+	s.RESTConfig.Dial = tunn.TunnelTo
+
+	return errors.WithStack(HackIssue321InitDynamicClient(s))
 }
 
 // HackIssue321InitDynamicClient initialize controller-runtime/client
 // name comes from: https://github.com/kubernetes-sigs/controller-runtime/issues/321
 func HackIssue321InitDynamicClient(s *state.State) error {
+	var err error
 	if s.RESTConfig == nil {
 		return errors.New("rest config is not initialized")
 	}
 
-	var err error
 	s.DynamicClient, err = client.New(s.RESTConfig, client.Options{})
 	return errors.Wrap(err, "unable to build dynamic client")
 }

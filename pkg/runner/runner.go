@@ -17,16 +17,15 @@ limitations under the License.
 package runner
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/koron-go/prefixw"
 	"github.com/pkg/errors"
 
+	"github.com/kubermatic/kubeone/pkg/scripts"
 	"github.com/kubermatic/kubeone/pkg/ssh"
 )
 
@@ -42,24 +41,13 @@ type Runner struct {
 // TemplateVariables is a render context for templates
 type TemplateVariables map[string]interface{}
 
-// Run executes a given command/script, optionally printing its output to
-// stdout/stderr.
-func (r *Runner) Run(cmd string, variables TemplateVariables) (string, string, error) {
+func (r *Runner) RunRaw(cmd string) (string, string, error) {
 	if r.Conn == nil {
 		return "", "", errors.New("runner is not tied to an opened SSH connection")
 	}
 
-	cmd, err := MakeShellCommand(cmd, variables)
-	if err != nil {
-		return "", "", err
-	}
-
-	cmd = r.prepareShell(cmd)
-
 	if !r.Verbose {
-		var stdout, stderr string
-
-		stdout, stderr, _, err = r.Conn.Exec(cmd)
+		stdout, stderr, _, err := r.Conn.Exec(cmd)
 		if err != nil {
 			err = errors.Wrap(err, stderr)
 		}
@@ -68,15 +56,26 @@ func (r *Runner) Run(cmd string, variables TemplateVariables) (string, string, e
 	}
 
 	stdout := NewTee(prefixw.New(os.Stdout, r.Prefix))
+	defer stdout.Close()
+
 	stderr := NewTee(prefixw.New(os.Stderr, r.Prefix))
+	defer stderr.Close()
 
 	// run the command
-	_, err = r.Conn.Stream(cmd, stdout, stderr)
-
-	stdout.Close()
-	stderr.Close()
+	_, err := r.Conn.Stream(cmd, stdout, stderr)
 
 	return stdout.String(), stderr.String(), err
+}
+
+// Run executes a given command/script, optionally printing its output to
+// stdout/stderr.
+func (r *Runner) Run(cmd string, variables TemplateVariables) (string, string, error) {
+	cmd, err := scripts.Render(cmd, variables)
+	if err != nil {
+		return "", "", err
+	}
+
+	return r.RunRaw(cmd)
 }
 
 // WaitForPod waits for the availability of the given Kubernetes element.
@@ -110,30 +109,4 @@ func (r *Runner) WaitForCondition(cmd string, timeout time.Duration, validator v
 	}
 
 	return false
-}
-
-// prepareShell sets up the shell depending on the OS it's running on.
-func (r *Runner) prepareShell(cmd string) string {
-	// ensure we fail early
-	cmd = fmt.Sprintf("set -xeu pipefail\n\n%s", cmd)
-
-	// ensure sudo works on exotic distros
-	cmd = fmt.Sprintf("export \"PATH=$PATH:/sbin:/usr/local/bin:/opt/bin\"\n\n%s", cmd)
-
-	return cmd
-}
-
-// MakeShellCommand render text template with given `variables` render-context
-func MakeShellCommand(cmd string, variables TemplateVariables) (string, error) {
-	tpl, err := template.New("base").Parse(cmd)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to parse shell script")
-	}
-
-	buf := bytes.Buffer{}
-	if err := tpl.Execute(&buf, variables); err != nil {
-		return "", errors.Wrap(err, "failed to render shell script")
-	}
-
-	return buf.String(), nil
 }

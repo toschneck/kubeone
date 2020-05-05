@@ -19,6 +19,7 @@ package scheme
 import (
 	"github.com/kubermatic/kubeone/pkg/apis/kubeone"
 	"github.com/kubermatic/kubeone/pkg/apis/kubeone/v1alpha1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -30,7 +31,7 @@ import (
 var Scheme = runtime.NewScheme()
 
 // Codecs is a CodecFactory object used to provide encoding and decoding for the scheme
-var Codecs = serializer.NewCodecFactory(Scheme)
+var Codecs = serializer.NewCodecFactory(Scheme, serializer.EnableStrict)
 
 func init() {
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})

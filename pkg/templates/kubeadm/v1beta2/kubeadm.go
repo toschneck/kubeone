@@ -55,20 +55,26 @@ func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, er
 		nodeIP = host.PublicAddress
 	}
 
-	nodeRegistration := kubeadmv1beta2.NodeRegistrationOptions{
-		Name: host.Hostname,
-		Taints: []corev1.Taint{
-			{
-				Effect: corev1.TaintEffectNoSchedule,
-				Key:    "node-role.kubernetes.io/master",
-			},
+	taints := []corev1.Taint{
+		{
+			Effect: corev1.TaintEffectNoSchedule,
+			Key:    "node-role.kubernetes.io/master",
 		},
+	}
+	if host.Untaint {
+		taints = nil
+	}
+
+	nodeRegistration := kubeadmv1beta2.NodeRegistrationOptions{
+		Name:   host.Hostname,
+		Taints: taints,
 		KubeletExtraArgs: map[string]string{
 			"anonymous-auth":      "false",
 			"node-ip":             nodeIP,
 			"read-only-port":      "0",
 			"rotate-certificates": "true",
 			"cluster-dns":         nodelocaldns.VirtualIP,
+			"volume-plugin-dir":   "/var/lib/kubelet/volumeplugins",
 		},
 	}
 
@@ -147,7 +153,9 @@ func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, er
 			CertSANs: []string{strings.ToLower(cluster.APIEndpoint.Host)},
 		},
 		ControllerManager: kubeadmv1beta2.ControlPlaneComponent{
-			ExtraArgs:    map[string]string{},
+			ExtraArgs: map[string]string{
+				"flex-volume-plugin-dir": "/var/lib/kubelet/volumeplugins",
+			},
 			ExtraVolumes: []kubeadmv1beta2.HostPathMount{},
 		},
 		ClusterName: cluster.Name,
@@ -170,12 +178,16 @@ func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, er
 
 		clusterConfig.ControllerManager.ExtraArgs["cloud-provider"] = provider
 		clusterConfig.ControllerManager.ExtraArgs["cloud-config"] = renderedCloudConfig
+		clusterConfig.ControllerManager.ExtraArgs["cluster-name"] = s.Cluster.Name
 		clusterConfig.ControllerManager.ExtraVolumes = append(clusterConfig.ControllerManager.ExtraVolumes, cloudConfigVol)
 
 		nodeRegistration.KubeletExtraArgs["cloud-provider"] = provider
 		nodeRegistration.KubeletExtraArgs["cloud-config"] = renderedCloudConfig
 
-		if cluster.CloudProvider.Name == kubeoneapi.CloudProviderNameAzure {
+		switch cluster.CloudProvider.Name {
+		case kubeoneapi.CloudProviderNameAzure:
+			clusterConfig.ControllerManager.ExtraArgs["configure-cloud-routes"] = "false"
+		case kubeoneapi.CloudProviderNameAWS:
 			clusterConfig.ControllerManager.ExtraArgs["configure-cloud-routes"] = "false"
 		}
 	}
@@ -215,4 +227,55 @@ func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, er
 	joinConfig.NodeRegistration = nodeRegistration
 
 	return []runtime.Object{initConfig, joinConfig, clusterConfig}, nil
+}
+
+// NewConfig returns all required configs to init a cluster via a set of v1beta2 configs
+func NewConfigWorker(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, error) {
+	cluster := s.Cluster
+	nodeIP := host.PrivateAddress
+	if nodeIP == "" {
+		nodeIP = host.PublicAddress
+	}
+
+	nodeRegistration := kubeadmv1beta2.NodeRegistrationOptions{
+		Name: host.Hostname,
+		KubeletExtraArgs: map[string]string{
+			"anonymous-auth":      "false",
+			"node-ip":             nodeIP,
+			"read-only-port":      "0",
+			"rotate-certificates": "true",
+			"cluster-dns":         nodelocaldns.VirtualIP,
+			"volume-plugin-dir":   "/var/lib/kubelet/volumeplugins",
+		},
+	}
+
+	controlPlaneEndpoint := fmt.Sprintf("%s:%d", cluster.APIEndpoint.Host, cluster.APIEndpoint.Port)
+
+	joinConfig := &kubeadmv1beta2.JoinConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "kubeadm.k8s.io/v1beta2",
+			Kind:       "JoinConfiguration",
+		},
+		Discovery: kubeadmv1beta2.Discovery{
+			BootstrapToken: &kubeadmv1beta2.BootstrapTokenDiscovery{
+				Token:                    s.JoinToken,
+				APIServerEndpoint:        controlPlaneEndpoint,
+				UnsafeSkipCAVerification: true,
+			},
+		},
+	}
+
+	if cluster.CloudProvider.CloudProviderInTree() {
+		renderedCloudConfig := "/etc/kubernetes/cloud-config"
+		provider := string(cluster.CloudProvider.Name)
+
+		nodeRegistration.KubeletExtraArgs["cloud-provider"] = provider
+		nodeRegistration.KubeletExtraArgs["cloud-config"] = renderedCloudConfig
+	}
+
+	if cluster.CloudProvider.External {
+		nodeRegistration.KubeletExtraArgs["cloud-provider"] = "external"
+	}
+
+	return []runtime.Object{joinConfig}, nil
 }
