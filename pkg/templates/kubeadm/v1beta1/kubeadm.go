@@ -25,13 +25,13 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 
-	kubeadmv1beta1 "github.com/kubermatic/kubeone/pkg/apis/kubeadm/v1beta1"
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/features"
-	"github.com/kubermatic/kubeone/pkg/kubeflags"
-	"github.com/kubermatic/kubeone/pkg/state"
-	"github.com/kubermatic/kubeone/pkg/templates/kubeadm/kubeadmargs"
-	"github.com/kubermatic/kubeone/pkg/templates/nodelocaldns"
+	kubeadmv1beta1 "k8c.io/kubeone/pkg/apis/kubeadm/v1beta1"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/features"
+	"k8c.io/kubeone/pkg/kubeflags"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/templates/kubeadm/kubeadmargs"
+	"k8c.io/kubeone/pkg/templates/nodelocaldns"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,19 +55,9 @@ func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, er
 		nodeIP = host.PublicAddress
 	}
 
-	taints := []corev1.Taint{
-		{
-			Effect: corev1.TaintEffectNoSchedule,
-			Key:    "node-role.kubernetes.io/master",
-		},
-	}
-	if host.Untaint {
-		taints = nil
-	}
-
 	nodeRegistration := kubeadmv1beta1.NodeRegistrationOptions{
 		Name:   host.Hostname,
-		Taints: taints,
+		Taints: host.Taints,
 		KubeletExtraArgs: map[string]string{
 			"anonymous-auth":      "false",
 			"node-ip":             nodeIP,
@@ -170,7 +160,7 @@ func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, er
 			ReadOnly:  true,
 			PathType:  corev1.HostPathFile,
 		}
-		provider := string(cluster.CloudProvider.Name)
+		provider := cluster.CloudProvider.CloudProivderName()
 
 		clusterConfig.APIServer.ExtraArgs["cloud-provider"] = provider
 		clusterConfig.APIServer.ExtraArgs["cloud-config"] = renderedCloudConfig
@@ -184,10 +174,10 @@ func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, er
 		nodeRegistration.KubeletExtraArgs["cloud-provider"] = provider
 		nodeRegistration.KubeletExtraArgs["cloud-config"] = renderedCloudConfig
 
-		switch cluster.CloudProvider.Name {
-		case kubeoneapi.CloudProviderNameAzure:
+		switch {
+		case cluster.CloudProvider.Azure != nil:
 			clusterConfig.ControllerManager.ExtraArgs["configure-cloud-routes"] = "false"
-		case kubeoneapi.CloudProviderNameAWS:
+		case cluster.CloudProvider.AWS != nil:
 			clusterConfig.ControllerManager.ExtraArgs["configure-cloud-routes"] = "false"
 		}
 	}
@@ -215,6 +205,17 @@ func NewConfig(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Object, er
 		}
 		clusterConfig.APIServer.ExtraVolumes = append(clusterConfig.APIServer.ExtraVolumes, auditPolicyVol)
 		clusterConfig.APIServer.ExtraVolumes = append(clusterConfig.APIServer.ExtraVolumes, logVol)
+	}
+
+	if cluster.Features.PodNodeSelector != nil && cluster.Features.PodNodeSelector.Enable {
+		admissionVol := kubeadmv1beta1.HostPathMount{
+			Name:      "admission-conf",
+			HostPath:  "/etc/kubernetes/admission",
+			MountPath: "/etc/kubernetes/admission",
+			ReadOnly:  true,
+			PathType:  corev1.HostPathDirectoryOrCreate,
+		}
+		clusterConfig.APIServer.ExtraVolumes = append(clusterConfig.APIServer.ExtraVolumes, admissionVol)
 	}
 
 	args := kubeadmargs.NewFrom(clusterConfig.APIServer.ExtraArgs)
@@ -267,9 +268,8 @@ func NewConfigWorker(s *state.State, host kubeoneapi.HostConfig) ([]runtime.Obje
 
 	if cluster.CloudProvider.CloudProviderInTree() {
 		renderedCloudConfig := "/etc/kubernetes/cloud-config"
-		provider := string(cluster.CloudProvider.Name)
 
-		nodeRegistration.KubeletExtraArgs["cloud-provider"] = provider
+		nodeRegistration.KubeletExtraArgs["cloud-provider"] = cluster.CloudProvider.CloudProivderName()
 		nodeRegistration.KubeletExtraArgs["cloud-config"] = renderedCloudConfig
 	}
 

@@ -25,11 +25,11 @@ import (
 
 	"github.com/pkg/errors"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/certificate"
-	"github.com/kubermatic/kubeone/pkg/clientutil"
-	"github.com/kubermatic/kubeone/pkg/credentials"
-	"github.com/kubermatic/kubeone/pkg/state"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/certificate"
+	"k8c.io/kubeone/pkg/clientutil"
+	"k8c.io/kubeone/pkg/credentials"
+	"k8c.io/kubeone/pkg/state"
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -50,6 +50,7 @@ const (
 	WebhookAppLabelValue = WebhookName
 	WebhookTag           = MachineControllerTag
 	WebhookNamespace     = metav1.NamespaceSystem
+	WebhookPort          = 9876
 )
 
 // DeployWebhookConfiguration deploys MachineController webhook deployment on the cluster
@@ -94,44 +95,22 @@ func DeployWebhookConfiguration(s *state.State) error {
 }
 
 // WaitForWebhook waits for machine-controller-webhook to become running
-func WaitForWebhook(client dynclient.Client) error {
-	listOpts := dynclient.ListOptions{
+func waitForWebhook(ctx context.Context, client dynclient.Client) error {
+	condFn := clientutil.PodsReadyCondition(ctx, client, dynclient.ListOptions{
 		Namespace: WebhookNamespace,
 		LabelSelector: labels.SelectorFromSet(map[string]string{
 			WebhookAppLabelKey: WebhookAppLabelValue,
 		}),
-	}
-
-	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
-		webhookPods := corev1.PodList{}
-		err := client.List(context.Background(), &webhookPods, &listOpts)
-		if err != nil {
-			return false, errors.Wrap(err, "failed to list machine-controller's webhook pods")
-		}
-
-		if len(webhookPods.Items) == 0 {
-			return false, nil
-		}
-
-		whpod := webhookPods.Items[0]
-
-		if whpod.Status.Phase == corev1.PodRunning {
-			for _, podcond := range whpod.Status.Conditions {
-				if podcond.Type == corev1.PodReady && podcond.Status == corev1.ConditionTrue {
-					return true, nil
-				}
-			}
-		}
-
-		return false, nil
 	})
+
+	return wait.Poll(5*time.Second, 3*time.Minute, condFn)
 }
 
 // webhookDeployment returns the deployment for the machine-controllers MutatignAdmissionWebhook
 func webhookDeployment(cluster *kubeoneapi.KubeOneCluster, credentialsFilePath string) (*appsv1.Deployment, error) {
 	var replicas int32 = 1
 
-	envVar, err := credentials.EnvVarBindings(cluster.CloudProvider.Name, credentialsFilePath)
+	envVar, err := credentials.EnvVarBindings(cluster.CloudProvider, credentialsFilePath)
 	envVar = append(envVar,
 		corev1.EnvVar{
 			Name:  "HTTPS_PROXY",
@@ -212,7 +191,7 @@ func webhookDeployment(cluster *kubeoneapi.KubeOneCluster, credentialsFilePath s
 							Args: []string{
 								"-logtostderr",
 								"-v", "4",
-								"-listen-address", "0.0.0.0:9876",
+								"-listen-address", fmt.Sprintf("0.0.0.0:%d", WebhookPort),
 							},
 							Env:                      envVar,
 							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
@@ -221,7 +200,7 @@ func webhookDeployment(cluster *kubeoneapi.KubeOneCluster, credentialsFilePath s
 								Handler: corev1.Handler{
 									HTTPGet: &corev1.HTTPGetAction{
 										Path:   "/healthz",
-										Port:   intstr.FromInt(9876),
+										Port:   intstr.FromInt(WebhookPort),
 										Scheme: corev1.URISchemeHTTPS,
 									},
 								},
@@ -235,7 +214,7 @@ func webhookDeployment(cluster *kubeoneapi.KubeOneCluster, credentialsFilePath s
 								Handler: corev1.Handler{
 									HTTPGet: &corev1.HTTPGetAction{
 										Path:   "/healthz",
-										Port:   intstr.FromInt(9876),
+										Port:   intstr.FromInt(WebhookPort),
 										Scheme: corev1.URISchemeHTTPS,
 									},
 								},

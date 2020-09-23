@@ -27,9 +27,8 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 
-	k1api "github.com/kubermatic/kubeone/pkg/apis/kubeone/v1alpha1"
-	"github.com/kubermatic/kubeone/test/e2e/provisioner"
-	"github.com/kubermatic/kubeone/test/e2e/testutil"
+	"k8c.io/kubeone/test/e2e/provisioner"
+	"k8c.io/kubeone/test/e2e/testutil"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,7 +45,7 @@ const (
 func TestClusterUpgrade(t *testing.T) {
 	testcases := []struct {
 		name                  string
-		provider              k1api.CloudProviderName
+		provider              string
 		providerExternal      bool
 		initialConfigPath     string
 		targetConfigPath      string
@@ -120,7 +119,7 @@ func TestClusterUpgrade(t *testing.T) {
 				t.Fatal("-target-version must be set")
 			}
 
-			if testProvider != string(tc.provider) {
+			if testProvider != tc.provider {
 				t.SkipNow()
 			}
 
@@ -129,7 +128,7 @@ func TestClusterUpgrade(t *testing.T) {
 			// Create provisioner
 			testPath := fmt.Sprintf("../../_build/%s", testRunIdentifier)
 
-			pr, err := provisioner.CreateProvisioner(testPath, testRunIdentifier, string(tc.provider))
+			pr, err := provisioner.CreateProvisioner(testPath, testRunIdentifier, tc.provider)
 			if err != nil {
 				t.Fatalf("failed to create provisioner: %v", err)
 			}

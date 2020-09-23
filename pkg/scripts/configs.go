@@ -17,12 +17,6 @@ limitations under the License.
 package scripts
 
 const (
-	kubernetesAdminConfigScript = `
-mkdir -p $HOME/.kube/
-sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-`
-
 	cloudConfigScriptTemplate = `
 sudo mkdir -p /etc/systemd/system/kubelet.service.d/ /etc/kubernetes
 sudo mv {{ .WORK_DIR }}/cfg/cloud-config /etc/kubernetes/cloud-config
@@ -37,11 +31,17 @@ if [[ -f "{{ .WORK_DIR }}/cfg/audit-policy.yaml" ]]; then
 	sudo chown root:root /etc/kubernetes/audit/policy.yaml
 fi
 `
-)
 
-func KubernetesAdminConfig() (string, error) {
-	return Render(kubernetesAdminConfigScript, nil)
-}
+	podNodeSelectorConfigTemplate = `
+if [[ -f "{{ .WORK_DIR }}/cfg/podnodeselector.yaml" ]]; then
+	sudo mkdir -p /etc/kubernetes/admission
+	sudo mv {{ .WORK_DIR }}/cfg/podnodeselector.yaml /etc/kubernetes/admission/podnodeselector.yaml
+	sudo mv {{ .WORK_DIR }}/cfg/admission-config.yaml /etc/kubernetes/admission/admission-config.yaml
+	sudo chown root:root /etc/kubernetes/admission/podnodeselector.yaml
+	sudo chown root:root /etc/kubernetes/admission/admission-config.yaml
+fi
+`
+)
 
 func SaveCloudConfig(workdir string) (string, error) {
 	return Render(cloudConfigScriptTemplate, Data{
@@ -51,6 +51,12 @@ func SaveCloudConfig(workdir string) (string, error) {
 
 func SaveAuditPolicyConfig(workdir string) (string, error) {
 	return Render(auditPolicyScriptTemplate, Data{
+		"WORK_DIR": workdir,
+	})
+}
+
+func SavePodNodeSelectorConfig(workdir string) (string, error) {
+	return Render(podNodeSelectorConfigTemplate, Data{
 		"WORK_DIR": workdir,
 	})
 }

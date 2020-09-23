@@ -21,17 +21,19 @@ import (
 
 	"github.com/pkg/errors"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/credentials"
-	"github.com/kubermatic/kubeone/pkg/runner"
-	"github.com/kubermatic/kubeone/pkg/ssh"
-	"github.com/kubermatic/kubeone/pkg/state"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/credentials"
+	"k8c.io/kubeone/pkg/runner"
+	"k8c.io/kubeone/pkg/ssh"
+	"k8c.io/kubeone/pkg/state"
 )
 
 const (
-	addonLabel = "kubeone.io/addon"
-
-	kubectlApplyScript = `kubectl apply -f {{.FILE_NAME}} --prune -l "%s"`
+	addonLabel         = "kubeone.io/addon"
+	kubectlApplyScript = `
+sudo KUBECONFIG=/etc/kubernetes/admin.conf \
+    kubectl apply -f {{.FILE_NAME}} --prune -l "%s"
+`
 )
 
 // TemplateData is data available in the addons render template
@@ -47,7 +49,7 @@ func Ensure(s *state.State) error {
 	}
 	s.Logger.Infoln("Applying addons…")
 
-	creds, err := credentials.ProviderCredentials(s.Cluster.CloudProvider.Name, s.CredentialsFilePath)
+	creds, err := credentials.ProviderCredentials(s.Cluster.CloudProvider, s.CredentialsFilePath)
 	if err != nil {
 		return errors.Wrap(err, "unable to fetch credentials")
 	}

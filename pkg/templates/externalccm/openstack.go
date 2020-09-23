@@ -21,8 +21,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/kubermatic/kubeone/pkg/clientutil"
-	"github.com/kubermatic/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/clientutil"
+	"k8c.io/kubeone/pkg/state"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -61,8 +61,9 @@ func ensureOpenStack(s *state.State) error {
 		osDaemonSet(),
 	}
 
+	withLabel := clientutil.WithComponentLabel(ccmComponentLabel)
 	for _, obj := range k8sobjects {
-		if err := clientutil.CreateOrUpdate(ctx, s.DynamicClient, obj); err != nil {
+		if err := clientutil.CreateOrUpdate(ctx, s.DynamicClient, obj, withLabel); err != nil {
 			return errors.Wrapf(err, "failed to ensure OpenStack CCM %T", obj)
 		}
 	}

@@ -17,12 +17,10 @@ limitations under the License.
 package metricsserver
 
 import (
-	"context"
-
 	"github.com/pkg/errors"
 
-	"github.com/kubermatic/kubeone/pkg/clientutil"
-	"github.com/kubermatic/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/clientutil"
+	"k8c.io/kubeone/pkg/state"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +33,7 @@ import (
 
 const (
 	metricsServerImage = `k8s.gcr.io/metrics-server:v0.3.6`
+	componentLabel     = "metrics-server"
 )
 
 // Deploy generate and POST all objects to apiserver
@@ -55,9 +54,9 @@ func Deploy(s *state.State) error {
 		metricServerClusterRoleBinding(),
 	}
 
-	ctx := context.Background()
+	withLabel := clientutil.WithComponentLabel(componentLabel)
 	for _, obj := range k8sobjects {
-		if err := clientutil.CreateOrUpdate(ctx, s.DynamicClient, obj); err != nil {
+		if err := clientutil.CreateOrUpdate(s.Context, s.DynamicClient, obj, withLabel); err != nil {
 			return errors.WithStack(err)
 		}
 	}

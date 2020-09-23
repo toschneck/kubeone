@@ -18,14 +18,17 @@ package tasks
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 	"time"
 
+	osrelease "github.com/dominodatalab/os-release"
 	"github.com/pkg/errors"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/scripts"
-	"github.com/kubermatic/kubeone/pkg/ssh"
-	"github.com/kubermatic/kubeone/pkg/state"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/scripts"
+	"k8c.io/kubeone/pkg/ssh"
+	"k8c.io/kubeone/pkg/state"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,7 +55,7 @@ func determineHostname(s *state.State) error {
 		hostnameCmd := scripts.Hostname()
 
 		// on azure the name of the Node should == name of the VM
-		if s.Cluster.CloudProvider.Name == kubeoneapi.CloudProviderNameAzure {
+		if s.Cluster.CloudProvider.Azure != nil {
 			hostnameCmd = `hostname`
 		}
 		stdout, _, err := s.Runner.Run(hostnameCmd, nil)
@@ -68,12 +71,19 @@ func determineHostname(s *state.State) error {
 func determineOS(s *state.State) error {
 	s.Logger.Infoln("Determine operating system…")
 	return s.RunTaskOnAllNodes(func(s *state.State, node *kubeoneapi.HostConfig, conn ssh.Connection) error {
-		osID, _, err := s.Runner.Run(scripts.OSID(), nil)
+		f, err := conn.File("/etc/os-release", os.O_RDONLY)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		buf, err := ioutil.ReadAll(f)
 		if err != nil {
 			return err
 		}
 
-		node.SetOperatingSystem(osID)
+		osrData := osrelease.Parse(string(buf))
+		node.SetOperatingSystem(kubeoneapi.OperatingSystemName(osrData.ID))
 		return nil
 	}, state.RunParallel)
 }
@@ -116,19 +126,9 @@ func unlabelNode(client dynclient.Client, host *kubeoneapi.HostConfig) error {
 	return errors.Wrapf(retErr, "failed to remove label %s from node %s", labelUpgradeLock, host.Hostname)
 }
 
-type osNameEnum string
-
 type runOnOSFn func(*state.State) error
 
-const (
-	osNameDebian  osNameEnum = "debian"
-	osNameUbuntu  osNameEnum = "ubuntu"
-	osNameCoreos  osNameEnum = "coreos"
-	osNameFlatcar osNameEnum = "flatcar"
-	osNameCentos  osNameEnum = "centos"
-)
-
-func runOnOS(s *state.State, osname osNameEnum, fnMap map[osNameEnum]runOnOSFn) error {
+func runOnOS(s *state.State, osname kubeoneapi.OperatingSystemName, fnMap map[kubeoneapi.OperatingSystemName]runOnOSFn) error {
 	fn, ok := fnMap[osname]
 	if !ok {
 		return errors.Errorf("%q is not a supported operating system", osname)

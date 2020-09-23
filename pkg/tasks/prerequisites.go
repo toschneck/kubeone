@@ -19,14 +19,11 @@ package tasks
 import (
 	"github.com/pkg/errors"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/scripts"
-	"github.com/kubermatic/kubeone/pkg/ssh"
-	"github.com/kubermatic/kubeone/pkg/state"
-)
-
-const (
-	dockerVersion = "18.09.7"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/scripts"
+	"k8c.io/kubeone/pkg/ssh"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/templates/admissionconfig"
 )
 
 func installPrerequisites(s *state.State) error {
@@ -39,9 +36,19 @@ func generateConfigurationFiles(s *state.State) error {
 	s.Configuration.AddFile("cfg/cloud-config", s.Cluster.CloudProvider.CloudConfig)
 
 	if s.Cluster.Features.StaticAuditLog != nil && s.Cluster.Features.StaticAuditLog.Enable {
-		err := s.Configuration.AddFilePath("cfg/audit-policy.yaml", s.Cluster.Features.StaticAuditLog.Config.PolicyFilePath)
-		if err != nil {
+		if err := s.Configuration.AddFilePath("cfg/audit-policy.yaml", s.Cluster.Features.StaticAuditLog.Config.PolicyFilePath, s.ManifestFilePath); err != nil {
 			return errors.Wrap(err, "unable to add policy file")
+		}
+	}
+	if s.Cluster.Features.PodNodeSelector != nil && s.Cluster.Features.PodNodeSelector.Enable {
+		admissionCfg, err := admissionconfig.NewAdmissionConfig(s.Cluster.Versions.Kubernetes, s.Cluster.Features.PodNodeSelector)
+		if err != nil {
+			return errors.Wrap(err, "failed to generate admissionconfiguration manifest")
+		}
+		s.Configuration.AddFile("cfg/admission-config.yaml", admissionCfg)
+
+		if err := s.Configuration.AddFilePath("cfg/podnodeselector.yaml", s.Cluster.Features.PodNodeSelector.Config.ConfigFilePath, s.ManifestFilePath); err != nil {
+			return errors.Wrap(err, "failed to add podnodeselector config file")
 		}
 	}
 
@@ -77,17 +84,17 @@ func createEnvironmentFile(s *state.State) error {
 }
 
 func installKubeadm(s *state.State, node kubeoneapi.HostConfig) error {
-	return runOnOS(s, osNameEnum(node.OperatingSystem), map[osNameEnum]runOnOSFn{
-		osNameDebian:  installKubeadmDebian,
-		osNameUbuntu:  installKubeadmDebian,
-		osNameCoreos:  installKubeadmCoreOS,
-		osNameFlatcar: installKubeadmCoreOS,
-		osNameCentos:  installKubeadmCentOS,
+	return runOnOS(s, node.OperatingSystem, map[kubeoneapi.OperatingSystemName]runOnOSFn{
+		kubeoneapi.OperatingSystemNameUbuntu:  installKubeadmDebian,
+		kubeoneapi.OperatingSystemNameCoreOS:  installKubeadmCoreOS,
+		kubeoneapi.OperatingSystemNameFlatcar: installKubeadmCoreOS,
+		kubeoneapi.OperatingSystemNameCentOS:  installKubeadmCentOS,
+		kubeoneapi.OperatingSystemNameRHEL:    installKubeadmCentOS,
 	})
 }
 
 func installKubeadmDebian(s *state.State) error {
-	cmd, err := scripts.KubeadmDebian(s.Cluster, dockerVersion)
+	cmd, err := scripts.KubeadmDebian(s.Cluster, s.ForceInstall)
 	if err != nil {
 		return err
 	}
@@ -98,12 +105,7 @@ func installKubeadmDebian(s *state.State) error {
 }
 
 func installKubeadmCentOS(s *state.State) error {
-	proxy := s.Cluster.Proxy.HTTPS
-	if proxy == "" {
-		proxy = s.Cluster.Proxy.HTTP
-	}
-
-	cmd, err := scripts.KubeadmCentOS(s.Cluster, proxy)
+	cmd, err := scripts.KubeadmCentOS(s.Cluster, s.ForceInstall)
 	if err != nil {
 		return err
 	}
@@ -147,6 +149,15 @@ func uploadConfigurationFilesToNode(s *state.State, node *kubeoneapi.HostConfig,
 	}
 
 	cmd, err = scripts.SaveAuditPolicyConfig(s.WorkDir)
+	if err != nil {
+		return err
+	}
+	_, _, err = s.Runner.RunRaw(cmd)
+	if err != nil {
+		return err
+	}
+
+	cmd, err = scripts.SavePodNodeSelectorConfig(s.WorkDir)
 	if err != nil {
 		return err
 	}

@@ -17,8 +17,8 @@ limitations under the License.
 package features
 
 import (
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/templates/kubeadm/kubeadmargs"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/templates/kubeadm/kubeadmargs"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 	pluginFlag           = "enable-admission-plugins"
 )
 
-func activatePodPresets(feature *kubeoneapi.PodPresets, args *kubeadmargs.Args) {
+func activateKubeadmPodPresets(feature *kubeoneapi.PodPresets, args *kubeadmargs.Args) {
 	if feature == nil || !feature.Enable {
 		return
 	}

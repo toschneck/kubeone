@@ -22,9 +22,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/kubermatic/kubeone/pkg/clientutil"
-	"github.com/kubermatic/kubeone/pkg/credentials"
-	"github.com/kubermatic/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/clientutil"
+	"k8c.io/kubeone/pkg/credentials"
+	"k8c.io/kubeone/pkg/state"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -49,16 +49,17 @@ func ensureHetzner(s *state.State) error {
 	k8sobject := []runtime.Object{
 		hetznerServiceAccount(),
 		hetznerClusterRoleBinding(),
+		hetznerDeployment(s.Cluster.CloudProvider.Hetzner.NetworkID, s.Cluster.ClusterNetwork.PodSubnet),
 	}
 
+	withLabel := clientutil.WithComponentLabel(ccmComponentLabel)
 	for _, obj := range k8sobject {
-		if err := clientutil.CreateOrUpdate(ctx, s.DynamicClient, obj); err != nil {
+		if err := clientutil.CreateOrUpdate(ctx, s.DynamicClient, obj, withLabel); err != nil {
 			return errors.Wrapf(err, "failed to ensure hetzner CCM %T", obj)
 		}
 	}
 
-	dep := hetznerDeployment(s.Cluster.ClusterNetwork.NetworkID, s.Cluster.ClusterNetwork.PodSubnet)
-	return clientutil.CreateOrUpdate(ctx, s.DynamicClient, dep)
+	return nil
 }
 
 func hetznerServiceAccount() *corev1.ServiceAccount {

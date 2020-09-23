@@ -19,7 +19,7 @@ package scripts
 import (
 	"testing"
 
-	"github.com/kubermatic/kubeone/pkg/testhelper"
+	"k8c.io/kubeone/pkg/testhelper"
 )
 
 func TestKubeadmJoin(t *testing.T) {
@@ -261,7 +261,7 @@ func TestKubeadmUpgradeLeader(t *testing.T) {
 			name: "v1beta2",
 			args: args{
 				workdir:    "test-wd",
-				kubeadmCmd: "kubeadm upgrade node",
+				kubeadmCmd: "kubeadm upgrade node --certificate-renewal=true",
 			},
 		},
 	}

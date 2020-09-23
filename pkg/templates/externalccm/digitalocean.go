@@ -21,9 +21,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/kubermatic/kubeone/pkg/clientutil"
-	"github.com/kubermatic/kubeone/pkg/credentials"
-	"github.com/kubermatic/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/clientutil"
+	"k8c.io/kubeone/pkg/credentials"
+	"k8c.io/kubeone/pkg/state"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -51,15 +51,17 @@ func ensureDigitalOcean(s *state.State) error {
 		sa,
 		crole,
 		genClusterRoleBinding("system:cloud-controller-manager", crole, sa),
+		doDeployment(),
 	}
 
+	withLabel := clientutil.WithComponentLabel(ccmComponentLabel)
 	for _, obj := range k8sobject {
-		if err := clientutil.CreateOrUpdate(ctx, s.DynamicClient, obj); err != nil {
+		if err := clientutil.CreateOrUpdate(ctx, s.DynamicClient, obj, withLabel); err != nil {
 			return errors.Wrapf(err, "failed to ensure digitalocean CCM %T", obj)
 		}
 	}
 
-	return clientutil.CreateOrUpdate(ctx, s.DynamicClient, doDeployment())
+	return nil
 }
 
 func doServiceAccount() *corev1.ServiceAccount {

@@ -23,9 +23,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/clientutil"
-	"github.com/kubermatic/kubeone/pkg/state"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/clientutil"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/templates"
 
 	clustercommon "github.com/kubermatic/machine-controller/pkg/apis/cluster/common"
 	clusterv1alpha1 "github.com/kubermatic/machine-controller/pkg/apis/cluster/v1alpha1"
@@ -46,7 +47,7 @@ func CreateMachineDeployments(s *state.State) error {
 	ctx := context.Background()
 
 	// Apply MachineDeployments
-	for _, workerset := range s.Cluster.Workers {
+	for _, workerset := range s.Cluster.DynamicWorkers {
 		machinedeployment, err := createMachineDeployment(s.Cluster, workerset)
 		if err != nil {
 			return errors.Wrap(err, "failed to generate MachineDeployment")
@@ -61,10 +62,32 @@ func CreateMachineDeployments(s *state.State) error {
 	return nil
 }
 
-func createMachineDeployment(cluster *kubeoneapi.KubeOneCluster, workerset kubeoneapi.WorkerConfig) (*clusterv1alpha1.MachineDeployment, error) {
-	provider := cluster.CloudProvider.Name
+// GenerateMachineDeploymentsManifest generates YAML manifests containing
+// all MachineDeployments present in the state.
+func GenerateMachineDeploymentsManifest(s *state.State) (string, error) {
+	if len(s.Cluster.DynamicWorkers) == 0 {
+		return "", nil
+	}
 
-	cloudProviderSpec, err := machineSpec(cluster, workerset, provider)
+	objs := []runtime.Object{}
+	for _, workerset := range s.Cluster.DynamicWorkers {
+		machinedeployment, err := createMachineDeployment(s.Cluster, workerset)
+		if err != nil {
+			return "", errors.Wrap(err, "failed to generate MachineDeployment")
+		}
+		machinedeployment.TypeMeta = metav1.TypeMeta{
+			APIVersion: clusterv1alpha1.SchemeGroupVersion.String(),
+			Kind:       "MachineDeployment",
+		}
+
+		objs = append(objs, machinedeployment)
+	}
+
+	return templates.KubernetesToYAML(objs)
+}
+
+func createMachineDeployment(cluster *kubeoneapi.KubeOneCluster, workerset kubeoneapi.DynamicWorkerConfig) (*clusterv1alpha1.MachineDeployment, error) {
+	cloudProviderSpec, err := machineSpec(cluster, workerset, cluster.CloudProvider)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate machineSpec")
 	}
@@ -78,10 +101,10 @@ func createMachineDeployment(cluster *kubeoneapi.KubeOneCluster, workerset kubeo
 
 	encoded, err := json.Marshal(struct {
 		kubeoneapi.ProviderSpec
-		CloudProvider kubeoneapi.CloudProviderName `json:"cloudProvider"`
+		CloudProvider string `json:"cloudProvider"`
 	}{
 		ProviderSpec:  workerset.Config,
-		CloudProvider: provider,
+		CloudProvider: cluster.CloudProvider.CloudProivderName(),
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to JSON marshal providerSpec")
@@ -142,7 +165,7 @@ func createMachineDeployment(cluster *kubeoneapi.KubeOneCluster, workerset kubeo
 	}, nil
 }
 
-func machineSpec(cluster *kubeoneapi.KubeOneCluster, workerset kubeoneapi.WorkerConfig, provider kubeoneapi.CloudProviderName) (map[string]interface{}, error) {
+func machineSpec(cluster *kubeoneapi.KubeOneCluster, workerset kubeoneapi.DynamicWorkerConfig, provider kubeoneapi.CloudProviderSpec) (map[string]interface{}, error) {
 	var err error
 
 	specRaw := workerset.Config.CloudProviderSpec
@@ -150,7 +173,7 @@ func machineSpec(cluster *kubeoneapi.KubeOneCluster, workerset kubeoneapi.Worker
 		return nil, errors.New("could't find cloudProviderSpec")
 	}
 
-	if provider == kubeoneapi.CloudProviderNameAWS {
+	if provider.AWS != nil {
 		var awsSpec AWSSpec
 
 		err = json.Unmarshal(specRaw, &awsSpec)

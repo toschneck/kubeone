@@ -21,9 +21,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/kubermatic/kubeone/pkg/credentials"
-	"github.com/kubermatic/kubeone/pkg/state"
-	"github.com/kubermatic/kubeone/pkg/tasks"
+	"k8c.io/kubeone/pkg/credentials"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/tasks"
 )
 
 type upgradeOpts struct {
@@ -51,7 +51,8 @@ func upgradeCmd(rootFlags *pflag.FlagSet) *cobra.Command {
 		Long: `Upgrade Kubernetes
 
 This command takes KubeOne manifest which contains information about hosts and how the cluster should be provisioned.
-It's possible to source information about hosts from Terraform output, using the '--tfjson' flag.`,
+It's possible to source information about hosts from Terraform output, using the '--tfjson' flag.
+`,
 		Example: `kubeone upgrade -m mycluster.yaml -t terraformoutput.json`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			gopts, err := persistentGlobalOptions(rootFlags)
@@ -88,7 +89,7 @@ func runUpgrade(opts *upgradeOpts) error {
 	}
 
 	// Validate credentials
-	_, err = credentials.ProviderCredentials(s.Cluster.CloudProvider.Name, opts.CredentialsFile)
+	_, err = credentials.ProviderCredentials(s.Cluster.CloudProvider, opts.CredentialsFile)
 	if err != nil {
 		return errors.Wrap(err, "failed to validate credentials")
 	}

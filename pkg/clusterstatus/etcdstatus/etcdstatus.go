@@ -24,12 +24,12 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/v3/clientv3"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/etcdutil"
-	"github.com/kubermatic/kubeone/pkg/ssh/sshtunnel"
-	"github.com/kubermatic/kubeone/pkg/state"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/etcdutil"
+	"k8c.io/kubeone/pkg/ssh/sshtunnel"
+	"k8c.io/kubeone/pkg/state"
 )
 
 const (
@@ -44,15 +44,11 @@ type Report struct {
 }
 
 func MemberList(s *state.State) (*clientv3.MemberListResponse, error) {
-	etcdEndpoints := []string{}
-	for _, node := range s.Cluster.Hosts {
-		etcdEndpoints = append(etcdEndpoints, fmt.Sprintf(clientEndpointFmt, node.PrivateAddress))
-	}
-
 	leader, err := s.Cluster.Leader()
 	if err != nil {
 		return nil, err
 	}
+	etcdEndpoints := []string{fmt.Sprintf(clientEndpointFmt, leader.PrivateAddress)}
 
 	etcdcfg, err := etcdutil.NewClientConfig(s, leader)
 	if err != nil {

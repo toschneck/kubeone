@@ -25,15 +25,16 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/kubermatic/kubeone/pkg/credentials"
-	"github.com/kubermatic/kubeone/pkg/state"
-	"github.com/kubermatic/kubeone/pkg/tasks"
+	"k8c.io/kubeone/pkg/credentials"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/tasks"
 )
 
 type installOpts struct {
 	globalOptions
 	BackupFile string `longflag:"backup" shortflag:"b"`
 	NoInit     bool   `longflag:"no-init"`
+	Force      bool   `longflag:"force"`
 }
 
 func (opts *installOpts) BuildState() (*state.State, error) {
@@ -42,6 +43,7 @@ func (opts *installOpts) BuildState() (*state.State, error) {
 		return nil, errors.Wrap(err, "failed to build state")
 	}
 
+	s.ForceInstall = opts.Force
 	s.BackupFile = opts.BackupFile
 	if s.BackupFile == "" {
 		fullPath, _ := filepath.Abs(opts.ManifestFile)
@@ -78,9 +80,8 @@ func installCmd(rootFlags *pflag.FlagSet) *cobra.Command {
 		Long: `
 Install Kubernetes on pre-existing machines
 
-This command takes KubeOne manifest which contains information about hosts and
-how the cluster should be provisioned. It's possible to source information about
-hosts from Terraform output, using the '--tfjson' flag.
+This command takes KubeOne manifest which contains information about hosts and how the cluster should be provisioned.
+It's possible to source information about hosts from Terraform output, using the '--tfjson' flag.
 `,
 		Example: `kubeone install -m mycluster.yaml -t terraformoutput.json`,
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -107,6 +108,12 @@ hosts from Terraform output, using the '--tfjson' flag.
 		false,
 		"don't initialize the cluster (only install binaries)")
 
+	cmd.Flags().BoolVar(
+		&opts.Force,
+		longFlagName(opts, "Force"),
+		false,
+		"use force to install new binary versions (!dangerous!)")
+
 	return cmd
 }
 
@@ -118,7 +125,7 @@ func runInstall(opts *installOpts) error {
 	}
 
 	// Validate credentials
-	_, err = credentials.ProviderCredentials(s.Cluster.CloudProvider.Name, opts.CredentialsFile)
+	_, err = credentials.ProviderCredentials(s.Cluster.CloudProvider, opts.CredentialsFile)
 	if err != nil {
 		return errors.Wrap(err, "failed to validate credentials")
 	}

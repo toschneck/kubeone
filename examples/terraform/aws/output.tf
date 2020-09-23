@@ -52,7 +52,7 @@ output "kubeone_workers" {
       replicas = var.initial_machinedeployment_replicas
       providerSpec = {
         sshPublicKeys   = [aws_key_pair.deployer.public_key]
-        operatingSystem = var.worker_os
+        operatingSystem = local.worker_os
         operatingSystemSpec = {
           distUpgradeOnBoot = false
         }
@@ -86,7 +86,7 @@ output "kubeone_workers" {
       replicas = var.initial_machinedeployment_replicas
       providerSpec = {
         sshPublicKeys   = [aws_key_pair.deployer.public_key]
-        operatingSystem = var.worker_os
+        operatingSystem = local.worker_os
         operatingSystemSpec = {
           distUpgradeOnBoot = false
         }
@@ -120,7 +120,7 @@ output "kubeone_workers" {
       replicas = var.initial_machinedeployment_replicas
       providerSpec = {
         sshPublicKeys   = [aws_key_pair.deployer.public_key]
-        operatingSystem = var.worker_os
+        operatingSystem = local.worker_os
         operatingSystemSpec = {
           distUpgradeOnBoot = false
         }
@@ -151,4 +151,3 @@ output "kubeone_workers" {
     }
   }
 }
-

@@ -21,8 +21,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/kubermatic/kubeone/pkg/state"
-	"github.com/kubermatic/kubeone/pkg/tasks"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/tasks"
 )
 
 type resetOpts struct {
@@ -52,9 +52,8 @@ func resetCmd(rootFlags *pflag.FlagSet) *cobra.Command {
 		Long: `
 Undo all changes done by KubeOne to the configured machines.
 
-This command takes KubeOne manifest which contains information about hosts.
-It's possible to source information about hosts from Terraform output, using the
-'--tfjson' flag.
+This command takes KubeOne manifest which contains information about hosts. It's possible to source information about
+hosts from Terraform output, using the '--tfjson' flag.
 `,
 		Example: `kubeone reset -m mycluster.yaml -t terraformoutput.json`,
 		RunE: func(_ *cobra.Command, args []string) error {

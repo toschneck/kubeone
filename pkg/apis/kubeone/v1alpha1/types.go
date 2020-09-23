@@ -180,9 +180,9 @@ type WorkerConfig struct {
 // ProviderSpec describes a worker node
 type ProviderSpec struct {
 	CloudProviderSpec   json.RawMessage   `json:"cloudProviderSpec"`
-	Labels              map[string]string `json:"labels"`
+	Labels              map[string]string `json:"labels,omitempty"`
 	Taints              []corev1.Taint    `json:"taints,omitempty"`
-	SSHPublicKeys       []string          `json:"sshPublicKeys"`
+	SSHPublicKeys       []string          `json:"sshPublicKeys,omitempty"`
 	OperatingSystem     string            `json:"operatingSystem"`
 	OperatingSystemSpec json.RawMessage   `json:"operatingSystemSpec"`
 
@@ -215,6 +215,7 @@ type MachineControllerConfig struct {
 
 // Features controls what features will be enabled on the cluster
 type Features struct {
+	PodNodeSelector   *PodNodeSelector   `json:"podNodeSelector"`
 	PodPresets        *PodPresets        `json:"podPresets"`
 	PodSecurityPolicy *PodSecurityPolicy `json:"podSecurityPolicy"`
 	StaticAuditLog    *StaticAuditLog    `json:"staticAuditLog"`
@@ -228,6 +229,21 @@ type SystemPackages struct {
 	// ConfigureRepositories (true by default) is a flag to control automatic
 	// configuration of kubeadm / docker repositories.
 	ConfigureRepositories bool `json:"configureRepositories"`
+}
+
+// PodNodeSelector feature flag
+type PodNodeSelector struct {
+	Enable bool                  `json:"enable"`
+	Config PodNodeSelectorConfig `json:"config"`
+}
+
+// PodNodeSelectorConfig config
+type PodNodeSelectorConfig struct {
+	// ConfigFilePath is a path on the local file system to the PodNodeSelector
+	// configuration file.
+	// ConfigFilePath is a required field.
+	// More info: https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#podnodeselector
+	ConfigFilePath string `json:"configFilePath"`
 }
 
 // PodPresets feature flag

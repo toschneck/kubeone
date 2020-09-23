@@ -22,9 +22,9 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/ssh/sshtunnel"
-	"github.com/kubermatic/kubeone/pkg/state"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/ssh/sshtunnel"
+	"k8c.io/kubeone/pkg/state"
 )
 
 const (
@@ -37,9 +37,12 @@ type Report struct {
 
 // Get uses the /healthz endpoint to check are all API server instances healthy
 func Get(s *state.State, node kubeoneapi.HostConfig) (*Report, error) {
-	roundTripper, err := sshtunnel.NewHTTPTransport(s.Connector, node, &tls.Config{InsecureSkipVerify: true})
+	insecureTLSConfig := &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+	roundTripper, err := sshtunnel.NewHTTPTransport(s.Connector, node, insecureTLSConfig)
 	if err != nil {
-		return nil, err
+		return &Report{
+			Health: false,
+		}, err
 	}
 
 	health, err := apiserverHealth(roundTripper, node.PrivateAddress)

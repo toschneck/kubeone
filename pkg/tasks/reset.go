@@ -19,13 +19,15 @@ package tasks
 import (
 	"github.com/pkg/errors"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/kubeconfig"
-	"github.com/kubermatic/kubeone/pkg/scripts"
-	"github.com/kubermatic/kubeone/pkg/ssh"
-	"github.com/kubermatic/kubeone/pkg/state"
-	"github.com/kubermatic/kubeone/pkg/templates/machinecontroller"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/clientutil"
+	"k8c.io/kubeone/pkg/kubeconfig"
+	"k8c.io/kubeone/pkg/scripts"
+	"k8c.io/kubeone/pkg/ssh"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/templates/machinecontroller"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -51,13 +53,13 @@ func destroyWorkers(s *state.State) error {
 		return errors.Wrap(lastErr, "unable to build kubernetes clientset")
 	}
 
-	_ = wait.ExponentialBackoff(defaultRetryBackoff(3), func() (bool, error) {
-		lastErr = machinecontroller.VerifyCRDs(s)
-		if lastErr != nil {
-			return false, nil
-		}
-		return true, nil
-	})
+	mcCRDs := []string{}
+	for _, crd := range machinecontroller.CRDs() {
+		mcCRDs = append(mcCRDs, crd.(metav1.Object).GetName())
+	}
+
+	condFn := clientutil.CRDsReadyCondition(s.Context, s.DynamicClient, mcCRDs)
+	lastErr = wait.ExponentialBackoff(defaultRetryBackoff(3), condFn)
 	if lastErr != nil {
 		s.Logger.Info("Skipping deleting worker nodes because machine-controller CRDs are not deployed")
 		return nil
@@ -126,17 +128,17 @@ func removeBinaries(s *state.State, node *kubeoneapi.HostConfig, conn ssh.Connec
 		return errors.Wrap(err, "failed to determine operating system")
 	}
 
-	return runOnOS(s, osNameEnum(node.OperatingSystem), map[osNameEnum]runOnOSFn{
-		osNameDebian:  removeBinariesDebian,
-		osNameUbuntu:  removeBinariesDebian,
-		osNameCoreos:  removeBinariesCoreOS,
-		osNameFlatcar: removeBinariesCoreOS,
-		osNameCentos:  removeBinariesCentOS,
+	return runOnOS(s, node.OperatingSystem, map[kubeoneapi.OperatingSystemName]runOnOSFn{
+		kubeoneapi.OperatingSystemNameUbuntu:  removeBinariesDebian,
+		kubeoneapi.OperatingSystemNameCoreOS:  removeBinariesCoreOS,
+		kubeoneapi.OperatingSystemNameFlatcar: removeBinariesCoreOS,
+		kubeoneapi.OperatingSystemNameCentOS:  removeBinariesCentOS,
+		kubeoneapi.OperatingSystemNameRHEL:    removeBinariesCentOS,
 	})
 }
 
 func removeBinariesDebian(s *state.State) error {
-	cmd, err := scripts.RemoveBinariesDebian(s.Cluster.Versions.Kubernetes, s.Cluster.Versions.KubernetesCNIVersion())
+	cmd, err := scripts.RemoveBinariesDebian()
 	if err != nil {
 		return err
 	}
@@ -146,7 +148,7 @@ func removeBinariesDebian(s *state.State) error {
 }
 
 func removeBinariesCentOS(s *state.State) error {
-	cmd, err := scripts.RemoveBinariesCentOS(s.Cluster.Versions.Kubernetes, s.Cluster.Versions.KubernetesCNIVersion())
+	cmd, err := scripts.RemoveBinariesCentOS()
 	if err != nil {
 		return err
 	}

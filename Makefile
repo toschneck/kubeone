@@ -21,7 +21,10 @@ export GOFLAGS?=-mod=readonly -trimpath
 BUILD_DATE=$(shell if hash gdate 2>/dev/null; then gdate --rfc-3339=seconds | sed 's/ /T/'; else date --rfc-3339=seconds | sed 's/ /T/'; fi)
 GITCOMMIT=$(shell git log -1 --pretty=format:"%H")
 GITTAG=$(shell git describe --tags --always)
-GOLDFLAGS?=-extldflags=-zrelro -extldflags=-znow -s -w -X github.com/kubermatic/kubeone/pkg/cmd.version=$(GITTAG) -X github.com/kubermatic/kubeone/pkg/cmd.commit=$(GITCOMMIT) -X github.com/kubermatic/kubeone/pkg/cmd.date=$(BUILD_DATE)
+GOLDFLAGS?=-s -w -extldflags=-zrelro -extldflags=-znow \
+	-X k8c.io/kubeone/pkg/cmd.version=$(GITTAG) \
+	-X k8c.io/kubeone/pkg/cmd.commit=$(GITCOMMIT) \
+	-X k8c.io/kubeone/pkg/cmd.date=$(BUILD_DATE)
 
 .PHONY: all
 all: install
@@ -34,12 +37,8 @@ install: buildenv
 build: dist/kubeone
 
 .PHONY: vendor
-vendor: buildenv download-dependencies
+vendor: buildenv
 	go mod vendor
-
-.PHONY: download-dependencies
-download-dependencies: buildenv
-	go mod download
 
 dist/kubeone: buildenv
 	go build -ldflags='$(GOLDFLAGS)' -v -o $@ .

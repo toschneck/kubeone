@@ -19,7 +19,7 @@ package tasks
 import (
 	"time"
 
-	"github.com/kubermatic/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/state"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -35,15 +35,17 @@ func defaultRetryBackoff(retries int) wait.Backoff {
 
 // Task is a runnable task
 type Task struct {
-	Fn      func(*state.State) error
-	ErrMsg  string
-	Retries int
+	Fn         func(*state.State) error
+	Predicate  func(*state.State) bool
+	Desciption string
+	ErrMsg     string
+	Retries    int
 }
 
 // Run runs a task
 func (t *Task) Run(s *state.State) error {
 	if t.Retries == 0 {
-		t.Retries = 3
+		t.Retries = 10
 	}
 
 	backoff := defaultRetryBackoff(t.Retries)

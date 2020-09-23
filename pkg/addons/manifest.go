@@ -26,15 +26,15 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig"
-	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"github.com/kubermatic/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/state"
 
 	metav1unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	kyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/yaml"
 )
 
 func getManifests(s *state.State, templateData TemplateData) error {

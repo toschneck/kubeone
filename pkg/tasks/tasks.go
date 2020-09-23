@@ -19,28 +19,46 @@ package tasks
 import (
 	"github.com/pkg/errors"
 
-	"github.com/kubermatic/kubeone/pkg/addons"
-	"github.com/kubermatic/kubeone/pkg/certificate"
-	"github.com/kubermatic/kubeone/pkg/clusterstatus"
-	"github.com/kubermatic/kubeone/pkg/credentials"
-	"github.com/kubermatic/kubeone/pkg/features"
-	"github.com/kubermatic/kubeone/pkg/kubeconfig"
-	"github.com/kubermatic/kubeone/pkg/state"
-	"github.com/kubermatic/kubeone/pkg/templates/externalccm"
-	"github.com/kubermatic/kubeone/pkg/templates/machinecontroller"
-	"github.com/kubermatic/kubeone/pkg/templates/nodelocaldns"
+	"k8c.io/kubeone/pkg/addons"
+	"k8c.io/kubeone/pkg/certificate"
+	"k8c.io/kubeone/pkg/clusterstatus"
+	"k8c.io/kubeone/pkg/credentials"
+	"k8c.io/kubeone/pkg/features"
+	"k8c.io/kubeone/pkg/kubeconfig"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/templates/externalccm"
+	"k8c.io/kubeone/pkg/templates/machinecontroller"
+	"k8c.io/kubeone/pkg/templates/nodelocaldns"
 )
 
 type Tasks []Task
 
 func (t Tasks) Run(s *state.State) error {
 	for _, step := range t {
+		if step.Predicate != nil && !step.Predicate(s) {
+			continue
+		}
 		if err := step.Run(s); err != nil {
 			return errors.Wrap(err, step.ErrMsg)
 		}
 	}
 
 	return nil
+}
+
+func (t Tasks) Descriptions(s *state.State) []string {
+	var descriptions []string
+
+	for _, step := range t {
+		if step.Predicate != nil && !step.Predicate(s) {
+			continue
+		}
+		if step.Desciption != "" {
+			descriptions = append(descriptions, step.Desciption)
+		}
+	}
+
+	return descriptions
 }
 
 func (t Tasks) append(newtasks ...Task) Tasks {
@@ -69,6 +87,13 @@ func WithHostnameOS(t Tasks) Tasks {
 	)
 }
 
+// WithProbes will run different probes over the defined cluster
+func WithProbes(t Tasks) Tasks {
+	return t.append(
+		Task{Fn: runProbes, ErrMsg: "probes failed"},
+	)
+}
+
 // WithFullInstall with install binaries (using WithBinariesOnly) and
 // orchestrate complete cluster init
 func WithFullInstall(t Tasks) Tasks {
@@ -83,13 +108,63 @@ func WithFullInstall(t Tasks) Tasks {
 			{Fn: kubeconfig.BuildKubernetesClientset, ErrMsg: "failed to build kubernetes clientset"},
 			{Fn: repairClusterIfNeeded, ErrMsg: "failed to repair cluster"},
 			{Fn: joinControlplaneNode, ErrMsg: "failed to join other masters a cluster"},
-			{Fn: copyKubeconfig, ErrMsg: "failed to copy kubeconfig to home directory"},
 			{Fn: saveKubeconfig, ErrMsg: "failed to save kubeconfig to the local machine"},
 		}...).
 		append(kubernetesResources()...).
 		append(
 			Task{Fn: createMachineDeployments, ErrMsg: "failed to create worker machines"},
 		)
+}
+
+func WithRefreshResources(t Tasks) Tasks {
+	return t.append(
+		Tasks{
+			{
+				Fn:         nodelocaldns.Deploy,
+				ErrMsg:     "failed to deploy nodelocaldns",
+				Desciption: "ensure nodelocaldns",
+			},
+			{
+				Fn:         ensureCNI,
+				ErrMsg:     "failed to install cni plugin",
+				Desciption: "ensure CNI",
+				Predicate:  func(s *state.State) bool { return s.Cluster.ClusterNetwork.CNI.External == nil },
+			},
+			{
+				Fn:         addons.Ensure,
+				ErrMsg:     "failed to apply addons",
+				Desciption: "ensure addons",
+				Predicate:  func(s *state.State) bool { return s.Cluster.Addons != nil && s.Cluster.Addons.Enable },
+			},
+			{
+				Fn:         credentials.Ensure,
+				ErrMsg:     "failed to ensure credentials secret",
+				Desciption: "ensure credential",
+			},
+			{
+				Fn:         externalccm.Ensure,
+				ErrMsg:     "failed to ensure external CCM",
+				Desciption: "ensure external CCM",
+				Predicate:  func(s *state.State) bool { return s.Cluster.CloudProvider.External },
+			},
+			{
+				Fn:     certificate.DownloadCA,
+				ErrMsg: "failed to download ca from leader",
+			},
+			{
+				Fn:         machinecontroller.Ensure,
+				ErrMsg:     "failed to ensure machine-controller",
+				Desciption: "ensure machine-controller",
+				Predicate:  func(s *state.State) bool { return s.Cluster.MachineController.Deploy },
+			},
+			{
+				Fn:         upgradeMachineDeployments,
+				ErrMsg:     "failed to upgrade MachineDeployments",
+				Desciption: "upgrade MachineDeployments",
+				Predicate:  func(s *state.State) bool { return s.UpgradeMachineDeployments },
+			},
+		}...,
+	)
 }
 
 func WithUpgrade(t Tasks) Tasks {
@@ -105,7 +180,12 @@ func WithUpgrade(t Tasks) Tasks {
 		append(kubernetesResources()...).
 		append(
 			Task{Fn: upgradeStaticWorkers, ErrMsg: "unable to upgrade static worker nodes"},
-			Task{Fn: upgradeMachineDeployments, ErrMsg: "failed to upgrade MachineDeployments"},
+			Task{
+				Fn:         upgradeMachineDeployments,
+				ErrMsg:     "failed to upgrade MachineDeployments",
+				Desciption: "upgrade MachineDeployments",
+				Predicate:  func(s *state.State) bool { return s.UpgradeMachineDeployments },
+			},
 		)
 }
 
@@ -135,16 +215,44 @@ func kubernetesConfigFiles() Tasks {
 
 func kubernetesResources() Tasks {
 	return Tasks{
-		{Fn: nodelocaldns.Deploy, ErrMsg: "failed to deploy nodelocaldns"},
+		{
+			Fn:         nodelocaldns.Deploy,
+			ErrMsg:     "failed to deploy nodelocaldns",
+			Desciption: "ensure nodelocaldns",
+		},
 		{Fn: features.Activate, ErrMsg: "failed to activate features"},
-		{Fn: ensureCNI, ErrMsg: "failed to install cni plugin"},
-		{Fn: addons.Ensure, ErrMsg: "failed to apply addons"},
+		{
+			Fn:         ensureCNI,
+			ErrMsg:     "failed to install cni plugin",
+			Desciption: "ensure CNI",
+			Predicate:  func(s *state.State) bool { return s.Cluster.ClusterNetwork.CNI.External == nil },
+		},
+		{
+			Fn:         addons.Ensure,
+			ErrMsg:     "failed to apply addons",
+			Desciption: "ensure addons",
+			Predicate:  func(s *state.State) bool { return s.Cluster.Addons != nil && s.Cluster.Addons.Enable },
+		},
 		{Fn: patchCoreDNS, ErrMsg: "failed to patch CoreDNS"},
-		{Fn: credentials.Ensure, ErrMsg: "failed to ensure credentials secret"},
-		{Fn: externalccm.Ensure, ErrMsg: "failed to ensure external CCM"},
+		{
+			Fn:         credentials.Ensure,
+			ErrMsg:     "failed to ensure credentials secret",
+			Desciption: "ensure credential",
+		},
+		{
+			Fn:         externalccm.Ensure,
+			ErrMsg:     "failed to ensure external CCM",
+			Desciption: "ensure external CCM",
+			Predicate:  func(s *state.State) bool { return s.Cluster.CloudProvider.External },
+		},
 		{Fn: patchCNI, ErrMsg: "failed to patch CNI"},
 		{Fn: joinStaticWorkerNodes, ErrMsg: "failed to join worker nodes to the cluster"},
-		{Fn: machinecontroller.Ensure, ErrMsg: "failed to install machine-controller"},
+		{
+			Fn:         machinecontroller.Ensure,
+			ErrMsg:     "failed to ensure machine-controller",
+			Desciption: "ensure machine-controller",
+			Predicate:  func(s *state.State) bool { return s.Cluster.MachineController.Deploy },
+		},
 		{Fn: machinecontroller.WaitReady, ErrMsg: "failed to wait for machine-controller"},
 	}
 }

@@ -19,9 +19,9 @@ linters:
   - goconst
   - gocritic
   - gocyclo
-  - golint
   - gofmt
   - goimports
+  - golint
   - gosec
   - gosimple
   - govet
@@ -43,19 +43,15 @@ linters-settings:
   govet:
     check-shadowing: true
   goimports:
-    local-prefixes: github.com/kubermatic/kubeone
+    local-prefixes: github.com/kubermatic
 
 issues:
-  exclude:
-  - "`defaultRetryBackoff` - `retries` always receives `3`"
-  - "func SetDefaults_Addons should be SetDefaultsAddons"
-  - "func SetDefaults_APIEndpoints should be SetDefaultsAPIEndpoints"
-  - "func SetDefaults_ClusterNetwork should be SetDefaultsClusterNetwork"
-  - "func SetDefaults_Proxy should be SetDefaultsProxy"
-  - "func SetDefaults_Features should be SetDefaultsFeatures"
-  - "func SetDefaults_Hosts should be SetDefaultsHosts"
-  - "func SetDefaults_KubeOneCluster should be SetDefaultsKubeOneCluster"
-  - "func SetDefaults_MachineController should be SetDefaultsMachineController"
-  - "func SetDefaults_SystemPackages should be SetDefaultsSystemPackages"
-  - "type name will be used as kubeone.KubeOneCluster by other packages"
-  - "G402: TLS InsecureSkipVerify set true"
+  exclude-rules:
+  - path: pkg/apis/kubeone
+    text: "func SetDefaults_"
+
+  - path: pkg/apis/kubeone
+    text: "func Convert_"
+
+  - path: pkg/apis/kubeone
+    text: "type name will be used as kubeone.KubeOneCluster by other packages"

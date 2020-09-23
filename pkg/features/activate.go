@@ -19,9 +19,15 @@ package features
 import (
 	"github.com/pkg/errors"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/state"
-	"github.com/kubermatic/kubeone/pkg/templates/kubeadm/kubeadmargs"
+	kubeoneapi "k8c.io/kubeone/pkg/apis/kubeone"
+	"k8c.io/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/templates/kubeadm/kubeadmargs"
+)
+
+const (
+	apiServerAdmissionPluginsFlag       = "enable-admission-plugins"
+	apiServerAdmissionControlConfigFlag = "admission-control-config-file"
+	apiServerAdmissionControlConfigPath = "/etc/kubernetes/admission/admission-config.yaml"
 )
 
 // Activate configured features.
@@ -37,6 +43,10 @@ func Activate(s *state.State) error {
 		return errors.Wrap(err, "failed to install metrics-server")
 	}
 
+	if err := installPodNodeSelector(s.Context, s.DynamicClient, s.Cluster.Features.PodNodeSelector); err != nil {
+		return errors.Wrap(err, "failed to install podNodeSelector")
+	}
+
 	return nil
 }
 
@@ -47,5 +57,6 @@ func UpdateKubeadmClusterConfiguration(featuresCfg kubeoneapi.Features, args *ku
 	activateKubeadmStaticAuditLogs(featuresCfg.StaticAuditLog, args)
 	activateKubeadmDynamicAuditLogs(featuresCfg.DynamicAuditLog, args)
 	activateKubeadmOIDC(featuresCfg.OpenIDConnect, args)
-	activatePodPresets(featuresCfg.PodPresets, args)
+	activateKubeadmPodPresets(featuresCfg.PodPresets, args)
+	activateKubeadmPodNodeSelector(featuresCfg.PodNodeSelector, args)
 }

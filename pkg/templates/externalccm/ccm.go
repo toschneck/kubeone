@@ -22,8 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	kubeoneapi "github.com/kubermatic/kubeone/pkg/apis/kubeone"
-	"github.com/kubermatic/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/state"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -33,6 +32,7 @@ import (
 
 const (
 	uninitializedTaint = "node.cloudprovider.kubernetes.io/uninitialized"
+	ccmComponentLabel  = "ccm"
 )
 
 // Ensure external CCM deployen if Provider.External
@@ -46,17 +46,17 @@ func Ensure(s *state.State) error {
 
 	s.PatchCNI = true
 
-	switch s.Cluster.CloudProvider.Name {
-	case kubeoneapi.CloudProviderNameHetzner:
+	switch {
+	case s.Cluster.CloudProvider.Hetzner != nil:
 		err = ensureHetzner(s)
-	case kubeoneapi.CloudProviderNameDigitalOcean:
+	case s.Cluster.CloudProvider.DigitalOcean != nil:
 		err = ensureDigitalOcean(s)
-	case kubeoneapi.CloudProviderNamePacket:
+	case s.Cluster.CloudProvider.Packet != nil:
 		err = ensurePacket(s)
-	case kubeoneapi.CloudProviderNameOpenStack:
+	case s.Cluster.CloudProvider.Openstack != nil:
 		err = ensureOpenStack(s)
 	default:
-		s.Logger.Infof("External CCM for %q not yet supported, skipping", s.Cluster.CloudProvider.Name)
+		s.Logger.Infof("External CCM for %q not yet supported, skipping", s.Cluster.CloudProvider.CloudProivderName())
 		return nil
 	}
 

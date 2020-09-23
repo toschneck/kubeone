@@ -20,11 +20,11 @@ import (
 	"net/url"
 
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/v3/clientv3"
 
-	"github.com/kubermatic/kubeone/pkg/clusterstatus/preflightstatus"
-	"github.com/kubermatic/kubeone/pkg/etcdutil"
-	"github.com/kubermatic/kubeone/pkg/state"
+	"k8c.io/kubeone/pkg/clusterstatus/preflightstatus"
+	"k8c.io/kubeone/pkg/etcdutil"
+	"k8c.io/kubeone/pkg/state"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -61,7 +61,7 @@ func repairClusterIfNeeded(s *state.State) error {
 	knownHostsIdentities := sets.NewString()
 	knownEtcdMembersIdentities := sets.NewString()
 
-	for _, host := range s.Cluster.Hosts {
+	for _, host := range s.Cluster.ControlPlane.Hosts {
 		knownHostsIdentities.Insert(host.Hostname, host.PublicAddress, host.PrivateAddress)
 	}
 

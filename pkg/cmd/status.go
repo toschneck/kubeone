@@ -21,7 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/kubermatic/kubeone/pkg/tasks"
+	"k8c.io/kubeone/pkg/tasks"
 )
 
 // statusCmd returns the structure for declaring the "status" subcommand.
@@ -31,8 +31,9 @@ func statusCmd(rootFlags *pflag.FlagSet) *cobra.Command {
 		Short: "Status of the cluster",
 		Long: `Status of the cluster.
 
-This command takes KubeOne manifest which contains information about hosts.
-It's possible to source information about hosts from Terraform output, using the '--tfjson' flag.`,
+This command takes KubeOne manifest which contains information about hosts. It's possible to source information about
+hosts from Terraform output, using the '--tfjson' flag.
+`,
 		Example: `kubeone status -m mycluster.yaml -t terraformoutput.json`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			gopts, err := persistentGlobalOptions(rootFlags)
