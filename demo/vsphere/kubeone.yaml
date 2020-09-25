@@ -1,9 +1,8 @@
-apiVersion: kubeone.io/v1alpha1
+apiVersion: kubeone.io/v1beta1
 kind: KubeOneCluster
 versions:
-  kubernetes: '1.16.5'
+  kubernetes: 1.18.6
 cloudProvider:
-  name: 'vsphere'
   cloudConfig: |
     [Global]
     secret-name = "cloud-provider-credentials"
@@ -17,20 +16,12 @@ cloudProvider:
     server = "1.1.1.1"
     datacenter = "dc-1"
     default-datastore="exsi-nas"
-    resourcepool-path="kubeone"
-    folder = "k1-cluster"
+    resourcepool-path="tobi-k1"
+    folder = "tobi-k1"
 
     [Disk]
     scsicontrollertype = pvscsi
 
     [Network]
     public-network = "Loodse Default"
-# features:
-  # Enables PodSecurityPolicy admission plugin in API server, as well as creates
-  # default 'privileged' PodSecurityPolicy, plus RBAC rules to authorize
-  # 'kube-system' namespace pods to 'use' it.
-#  podSecurityPolicy:
-#    enable: true
-#addons:
-#  enable: yes
-#  path: "./addons" # always apply
+  vsphere: {}

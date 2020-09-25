@@ -75,6 +75,11 @@ variable "resource_pool_name" {
   description = "cluster resource pool name"
 }
 
+variable "folder_name" {
+  default     = "kubeone"
+  description = "folder name"
+}
+
 variable "network_name" {
   default     = "public"
   description = "network name"
@@ -101,7 +106,7 @@ variable "control_plane_memory" {
 }
 
 variable "worker_memory" {
-  default     = 4096
+  default     = 2048
   description = "memory size of each worker node in MB"
 }
 
@@ -110,7 +115,3 @@ variable "worker_disk" {
   description = "disk size of each worker node in GB"
 }
 
-variable "cluster_folder" {
-  default = "k1-cluster"
-  description = "vSphere Folder"
-}
