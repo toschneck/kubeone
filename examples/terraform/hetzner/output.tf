@@ -18,7 +18,7 @@ output "kubeone_api" {
   description = "kube-apiserver LB endpoint"
 
   value = {
-    endpoint = hcloud_server.lb.ipv4_address
+    endpoint = hcloud_load_balancer.load_balancer.ipv4
   }
 }
 
@@ -47,7 +47,7 @@ output "kubeone_workers" {
     # following outputs will be parsed by kubeone and automatically merged into
     # corresponding (by name) worker definition
     "${var.cluster_name}-pool1" = {
-      replicas = 1
+      replicas = var.workers_replicas
       providerSpec = {
         sshPublicKeys   = [file(var.ssh_public_key_file)]
         operatingSystem = var.worker_os
@@ -60,6 +60,7 @@ output "kubeone_workers" {
           # https://github.com/kubermatic/machine-controller/blob/master/examples/hetzner-machinedeployment.yaml
           serverType = var.worker_type
           location   = var.datacenter
+          image      = var.image
           networks = [
             hcloud_network.net.id
           ]

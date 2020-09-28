@@ -34,6 +34,8 @@ func (c KubeOneCluster) Leader() (HostConfig, error) {
 }
 
 func (c KubeOneCluster) RandomHost() HostConfig {
+	//nolint:gosec
+	// G404: Use of weak random number generator (math/rand instead of crypto/rand) (gosec)
 	n := rand.Int31n(int32(len(c.ControlPlane.Hosts)))
 	return c.ControlPlane.Hosts[n]
 }
@@ -66,7 +68,7 @@ func (h *HostConfig) SetLeader(leader bool) {
 }
 
 // CloudProviderName returns name of the cloud provider
-func (p CloudProviderSpec) CloudProivderName() string {
+func (p CloudProviderSpec) CloudProviderName() string {
 	switch {
 	case p.AWS != nil:
 		return "aws"

@@ -512,6 +512,32 @@ func TestValidateCloudProviderSpec(t *testing.T) {
 			providerConfig: kubeone.CloudProviderSpec{},
 			expectedError:  true,
 		},
+		{
+			name: "CSIMigration enabled",
+			providerConfig: kubeone.CloudProviderSpec{
+				CSIMigration: true,
+				AWS:          &kubeone.AWSSpec{},
+			},
+			expectedError: false,
+		},
+		{
+			name: "CSIMigration and CSIMigrationComplete enabled",
+			providerConfig: kubeone.CloudProviderSpec{
+				CSIMigration:         true,
+				CSIMigrationComplete: true,
+				AWS:                  &kubeone.AWSSpec{},
+			},
+			expectedError: false,
+		},
+		{
+			name: "CSIMigrationComplete enabled without CSIMigration",
+			providerConfig: kubeone.CloudProviderSpec{
+				CSIMigration:         false,
+				CSIMigrationComplete: true,
+				AWS:                  &kubeone.AWSSpec{},
+			},
+			expectedError: true,
+		},
 	}
 	for _, tc := range tests {
 		tc := tc
@@ -626,6 +652,47 @@ func TestValidateVersionConfig(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			errs := ValidateVersionConfig(tc.versionConfig, nil)
+			if (len(errs) == 0) == tc.expectedError {
+				t.Errorf("test case failed: expected %v, but got %v", tc.expectedError, (len(errs) != 0))
+			}
+		})
+	}
+}
+
+func TestValidateContainerRuntimeConfig(t *testing.T) {
+	tests := []struct {
+		name             string
+		containerRuntime kubeone.ContainerRuntimeConfig
+		expectedError    bool
+	}{
+		{
+			name: "only docker defined",
+			containerRuntime: kubeone.ContainerRuntimeConfig{
+				Docker: &kubeone.ContainerRuntimeDocker{},
+			},
+			expectedError: false,
+		},
+		{
+			name: "only containerd defined",
+			containerRuntime: kubeone.ContainerRuntimeConfig{
+				Containerd: &kubeone.ContainerRuntimeContainerd{},
+			},
+			expectedError: false,
+		},
+		{
+			name: "both defined",
+			containerRuntime: kubeone.ContainerRuntimeConfig{
+				Docker:     &kubeone.ContainerRuntimeDocker{},
+				Containerd: &kubeone.ContainerRuntimeContainerd{},
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			errs := ValidateContainerRuntimeConfig(tc.containerRuntime, nil)
 			if (len(errs) == 0) == tc.expectedError {
 				t.Errorf("test case failed: expected %v, but got %v", tc.expectedError, (len(errs) != 0))
 			}

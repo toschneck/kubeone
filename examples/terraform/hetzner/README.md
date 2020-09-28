@@ -9,8 +9,8 @@ use the configs and how to provision a Kubernetes cluster using KubeOne.
 
 See the [Terraform loadbalancers in examples document][docs-tf-loadbalancer].
 
-[docs-infrastructure]: https://docs.kubermatic.com/kubeone/v1.0/infrastructure/terraform_configs/
-[docs-tf-loadbalancer]: https://docs.kubermatic.com/kubeone/v1.0/advanced/example_loadbalancer/
+[docs-infrastructure]: https://docs.kubermatic.com/kubeone/master/infrastructure/terraform_configs/
+[docs-tf-loadbalancer]: https://docs.kubermatic.com/kubeone/master/advanced/example_loadbalancer/
 
 ## Inputs
 
@@ -20,7 +20,7 @@ See the [Terraform loadbalancers in examples document][docs-tf-loadbalancer].
 | control\_plane\_type |  | string | `"cx21"` | no |
 | datacenter |  | string | `"fsn1"` | no |
 | image |  | string | `"ubuntu-18.04"` | no |
-| lb\_type |  | string | `"cx11"` | no |
+| lb\_type |  | string | `"lb11"` | no |
 | ssh\_agent\_socket | SSH Agent socket, default to grab from $SSH_AUTH_SOCK | string | `"env:SSH_AUTH_SOCK"` | no |
 | ssh\_port | SSH port to be used to provision instances | string | `"22"` | no |
 | ssh\_private\_key\_file | SSH private key file used to access instances | string | `""` | no |
